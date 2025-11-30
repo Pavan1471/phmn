@@ -482,16 +482,35 @@ function Play() {
         });
       };
       
+      // Helper function to show a single ad and mark it as watched (defined outside loop)
+      const showSingleAd = async (currentCount) => {
+        // Create a promise to track when the ad is marked as watched
+        let adWatchPromise = null;
+        
+        // Show 1 ad at a time
+        const result = await adsgramService.showAds(1, (adNumber, adResult) => {
+          // Mark ad as watched when shown - use captured currentCount parameter
+          adWatchPromise = markAdWatched(currentCount);
+        });
+        
+        // Wait for the ad to be marked as watched and return result and new count
+        let updatedCount = currentCount;
+        if (adWatchPromise) {
+          updatedCount = await adWatchPromise;
+        }
+        
+        return { result, updatedCount };
+      };
+      
       for (let i = 0; i < adsNeeded; i++) {
         // Capture current value for this iteration
         const currentCount = currentAdsWatched;
         
-        // Show 1 ad at a time
-        const result = await adsgramService.showAds(1, async (adNumber, adResult) => {
-          // Mark ad as watched when shown
-          const newCount = await markAdWatched(currentCount);
-          currentAdsWatched = newCount; // Update after getting response
-        });
+        // Show ad and get updated count
+        const { result, updatedCount } = await showSingleAd(currentCount);
+        
+        // Update count after iteration completes
+        currentAdsWatched = updatedCount;
 
         // If ad wasn't shown, break the loop
         if (result.watched === 0) {
