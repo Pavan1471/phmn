@@ -508,7 +508,7 @@ function Upgrade() {
                           <div className="flex items-center gap-1">
                             <img src={tonIcon} alt="TON" className="w-4 h-4" />
                             <span className="text-xs text-white">
-                              {tonAmount.toFixed(3)} TON (${usdAmount})
+                              {tonAmount.toFixed(3)} TON
                             </span>
                           </div>
                         </div>
