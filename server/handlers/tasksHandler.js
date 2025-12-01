@@ -112,9 +112,9 @@ class TasksHandler {
       referrer.referrals.push(parseInt(telegramId));
       referrer.totalReferrals = referrer.referrals.length;
       
-      // Give immediate reward for each referral (10 Gold Pieces)
-      const immediateReward = 10;
-      referrer.total_mined_pieces += immediateReward;
+      // Give immediate reward for each referral (0.01 PHMN)
+      const immediateReward = 0.01;
+      referrer.PHMN = (referrer.PHMN || 0) + immediateReward;
       referrer.totalReferralEarnings += immediateReward;
       
       // Check for milestone rewards
@@ -364,8 +364,8 @@ class TasksHandler {
       }
 
       // Award the referral reward
-      const rewardAmount = 10; // 10 Gold Pieces for first game
-      user.miningPieces += rewardAmount;
+      const rewardAmount = 0.01; // 0.01 PHMN for first game
+      user.PHMN = (user.PHMN || 0) + rewardAmount;
       user.totalReferralEarnings += rewardAmount;
       user.referralRewardsClaimed.push(parseInt(referralId));
       
@@ -382,7 +382,7 @@ class TasksHandler {
 
       callback({
         success: true,
-        message: `Referral reward claimed! +${rewardAmount} Gold Pieces`,
+        message: `Referral reward claimed! +${rewardAmount} PHMN`,
         rewardAmount,
         totalEarnings: user.totalReferralEarnings
       });
@@ -626,11 +626,11 @@ class TasksHandler {
           }
           
           // Award rewards for eligible referrals only
-          rewardAmount = eligibleCount * 10;
-          user.total_mined_pieces += rewardAmount;
+          rewardAmount = eligibleCount * 0.01;
+          user.PHMN = (user.PHMN || 0) + rewardAmount;
           user.totalReferralEarnings += rewardAmount;
           
-          message = `Referral rewards claimed! +${rewardAmount} Gold Pieces for ${eligibleCount} referral(s)`;
+          message = `Referral rewards claimed! +${rewardAmount.toFixed(2)} PHMN for ${eligibleCount} referral(s)`;
           break;
 
         case 'daily_login':
@@ -779,7 +779,6 @@ class TasksHandler {
         success: true,
         message,
         rewardAmount,
-        totalMinedPieces: user.total_mined_pieces,
         PHMN: user.PHMN || 0
       });
     } catch (error) {
