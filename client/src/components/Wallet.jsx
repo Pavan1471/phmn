@@ -216,7 +216,7 @@ function Wallet({ telegramUser }) {
     try {
       return phmnBalance.toLocaleString(undefined, {
         minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
+        maximumFractionDigits: 5,
       });
     } catch (error) {
       return '0';
