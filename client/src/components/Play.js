@@ -306,19 +306,24 @@ function Play() {
             setSessionEndTime(new Date(response.endTime));
           }
           
-          // For completed sessions, use server value. For active sessions, calculate client-side
-          if (response.sessionStatus === 'completed') {
-            setPendingRewards(response.pendingRewards || 0);
-          } else if (response.sessionStatus === 'active' && response.startTime && response.endTime) {
-            // Calculate pending rewards client-side based on elapsed time
+          // Calculate pending rewards client-side for both active and completed sessions
+          if ((response.sessionStatus === 'active' || response.sessionStatus === 'completed') && response.startTime && response.endTime) {
             const startTime = new Date(response.startTime);
             const endTime = new Date(response.endTime);
             const now = new Date();
-            const elapsedHours = (now - startTime) / (1000 * 60 * 60);
             const totalCycleHours = (endTime - startTime) / (1000 * 60 * 60);
             const effectiveRate = response.miningRate || response.baseMiningRate || 0.00463;
-            const calculatedPending = Math.min(effectiveRate * totalCycleHours, effectiveRate * elapsedHours);
-            setPendingRewards(Math.max(0, calculatedPending));
+            
+            if (response.sessionStatus === 'active') {
+              // For active sessions, calculate based on elapsed time
+              const elapsedHours = (now - startTime) / (1000 * 60 * 60);
+              const calculatedPending = Math.min(effectiveRate * totalCycleHours, effectiveRate * elapsedHours);
+              setPendingRewards(Math.max(0, calculatedPending));
+            } else {
+              // For completed sessions, use total cycle rewards
+              const calculatedPending = effectiveRate * totalCycleHours;
+              setPendingRewards(Math.max(0, calculatedPending));
+            }
           } else {
             setPendingRewards(response.pendingRewards || 0);
           }
@@ -393,19 +398,24 @@ function Play() {
                   setSessionEndTime(new Date(response.endTime));
                 }
                 
-                // For completed sessions, use server value. For active sessions, calculate client-side
-                if (response.sessionStatus === 'completed') {
-                  setPendingRewards(response.pendingRewards || 0);
-                } else if (response.sessionStatus === 'active' && response.startTime && response.endTime) {
-                  // Calculate pending rewards client-side based on elapsed time
+                // Calculate pending rewards client-side for both active and completed sessions
+                if ((response.sessionStatus === 'active' || response.sessionStatus === 'completed') && response.startTime && response.endTime) {
                   const startTime = new Date(response.startTime);
                   const endTime = new Date(response.endTime);
                   const now = new Date();
-                  const elapsedHours = (now - startTime) / (1000 * 60 * 60);
                   const totalCycleHours = (endTime - startTime) / (1000 * 60 * 60);
                   const effectiveRate = response.miningRate || response.baseMiningRate || 0.00463;
-                  const calculatedPending = Math.min(effectiveRate * totalCycleHours, effectiveRate * elapsedHours);
-                  setPendingRewards(Math.max(0, calculatedPending));
+                  
+                  if (response.sessionStatus === 'active') {
+                    // For active sessions, calculate based on elapsed time
+                    const elapsedHours = (now - startTime) / (1000 * 60 * 60);
+                    const calculatedPending = Math.min(effectiveRate * totalCycleHours, effectiveRate * elapsedHours);
+                    setPendingRewards(Math.max(0, calculatedPending));
+                  } else {
+                    // For completed sessions, use total cycle rewards
+                    const calculatedPending = effectiveRate * totalCycleHours;
+                    setPendingRewards(Math.max(0, calculatedPending));
+                  }
                 } else {
                   setPendingRewards(response.pendingRewards || 0);
                 }
@@ -694,8 +704,21 @@ function Play() {
           // Update state if session completed on server
           if (response.sessionStatus === 'completed' && miningState === 'active') {
             setMiningState('completed');
-            setPendingRewards(response.pendingRewards || 0);
             setRemainingTime(0);
+            // Store session times for completed session
+            if (response.startTime && response.endTime) {
+              setSessionStartTime(new Date(response.startTime));
+              setSessionEndTime(new Date(response.endTime));
+              // Calculate pending rewards for completed session
+              const startTime = new Date(response.startTime);
+              const endTime = new Date(response.endTime);
+              const totalCycleHours = (endTime - startTime) / (1000 * 60 * 60);
+              const effectiveRate = response.miningRate || response.baseMiningRate || 0.00463;
+              const calculatedPending = effectiveRate * totalCycleHours;
+              setPendingRewards(Math.max(0, calculatedPending));
+            } else {
+              setPendingRewards(response.pendingRewards || 0);
+            }
           } else if (response.sessionStatus === 'active') {
             // Sync remaining time from server
             setRemainingTime(response.remainingTime);
@@ -704,7 +727,7 @@ function Play() {
               setSessionStartTime(new Date(response.startTime));
               setSessionEndTime(new Date(response.endTime));
             }
-            // Calculate pending rewards client-side
+            // Calculate pending rewards client-side for active sessions
             if (response.startTime && response.endTime) {
               const startTime = new Date(response.startTime);
               const endTime = new Date(response.endTime);
@@ -713,6 +736,18 @@ function Play() {
               const totalCycleHours = (endTime - startTime) / (1000 * 60 * 60);
               const effectiveRate = response.miningRate || response.baseMiningRate || 0.00463;
               const calculatedPending = Math.min(effectiveRate * totalCycleHours, effectiveRate * elapsedHours);
+              setPendingRewards(Math.max(0, calculatedPending));
+            } else {
+              setPendingRewards(response.pendingRewards || 0);
+            }
+          } else if (response.sessionStatus === 'completed') {
+            // Calculate pending rewards for completed sessions
+            if (response.startTime && response.endTime) {
+              const startTime = new Date(response.startTime);
+              const endTime = new Date(response.endTime);
+              const totalCycleHours = (endTime - startTime) / (1000 * 60 * 60);
+              const effectiveRate = response.miningRate || response.baseMiningRate || 0.00463;
+              const calculatedPending = effectiveRate * totalCycleHours;
               setPendingRewards(Math.max(0, calculatedPending));
             } else {
               setPendingRewards(response.pendingRewards || 0);
@@ -727,9 +762,15 @@ function Play() {
 
   // Update pending rewards and progress during active mining (real-time calculation)
   useEffect(() => {
-    if (miningState !== 'active' || !sessionStartTime || !sessionEndTime) {
+    if ((miningState !== 'active' && miningState !== 'completed') || !sessionStartTime || !sessionEndTime) {
       if (miningState === 'completed') {
         setMiningProgress(100);
+        // Calculate final pending rewards for completed session
+        if (sessionStartTime && sessionEndTime) {
+          const totalCycleHours = (sessionEndTime - sessionStartTime) / (1000 * 60 * 60);
+          const calculatedPending = miningRate * totalCycleHours;
+          setPendingRewards(Math.max(0, calculatedPending));
+        }
       } else {
         setMiningProgress(0);
       }
@@ -743,16 +784,25 @@ function Play() {
       const endTime = sessionEndTime;
       
       if (startTime && endTime) {
-        const elapsedHours = (now - startTime) / (1000 * 60 * 60);
         const totalCycleHours = (endTime - startTime) / (1000 * 60 * 60);
-        const calculatedPending = Math.min(miningRate * totalCycleHours, miningRate * elapsedHours);
-        setPendingRewards(Math.max(0, calculatedPending));
         
-        // Update progress
-        const totalSessionTime = (endTime - startTime) / 1000;
-        const elapsedTime = (now - startTime) / 1000;
-        const progress = Math.min(100, Math.max(0, (elapsedTime / totalSessionTime) * 100));
-        setMiningProgress(progress);
+        if (miningState === 'active') {
+          // For active sessions, calculate based on elapsed time
+          const elapsedHours = (now - startTime) / (1000 * 60 * 60);
+          const calculatedPending = Math.min(miningRate * totalCycleHours, miningRate * elapsedHours);
+          setPendingRewards(Math.max(0, calculatedPending));
+          
+          // Update progress
+          const totalSessionTime = (endTime - startTime) / 1000;
+          const elapsedTime = (now - startTime) / 1000;
+          const progress = Math.min(100, Math.max(0, (elapsedTime / totalSessionTime) * 100));
+          setMiningProgress(progress);
+        } else if (miningState === 'completed') {
+          // For completed sessions, use total cycle rewards
+          const calculatedPending = miningRate * totalCycleHours;
+          setPendingRewards(Math.max(0, calculatedPending));
+          setMiningProgress(100);
+        }
       }
     }, 1000); // Update every second
 
