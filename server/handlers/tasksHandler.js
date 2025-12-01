@@ -112,8 +112,8 @@ class TasksHandler {
       referrer.referrals.push(parseInt(telegramId));
       referrer.totalReferrals = referrer.referrals.length;
       
-      // Give immediate reward for each referral (0.01 PHMN)
-      const immediateReward = 0.01;
+
+      const immediateReward = 0.3;
       referrer.PHMN = (referrer.PHMN || 0) + immediateReward;
       referrer.totalReferralEarnings += immediateReward;
       
@@ -364,7 +364,7 @@ class TasksHandler {
       }
 
       // Award the referral reward
-      const rewardAmount = 0.01; // 0.01 PHMN for first game
+      const rewardAmount = 0.3;
       user.PHMN = (user.PHMN || 0) + rewardAmount;
       user.totalReferralEarnings += rewardAmount;
       user.referralRewardsClaimed.push(parseInt(referralId));
@@ -626,7 +626,7 @@ class TasksHandler {
           }
           
           // Award rewards for eligible referrals only
-          rewardAmount = eligibleCount * 0.01;
+          rewardAmount = eligibleCount * 0.3;
           user.PHMN = (user.PHMN || 0) + rewardAmount;
           user.totalReferralEarnings += rewardAmount;
           
