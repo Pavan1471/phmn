@@ -112,7 +112,7 @@ class TasksHandler {
       referrer.referrals.push(parseInt(telegramId));
       referrer.totalReferrals = referrer.referrals.length;
       
-
+      // Give immediate reward for each referral (0.01 PHMN)
       const immediateReward = 0.3;
       referrer.PHMN = (referrer.PHMN || 0) + immediateReward;
       referrer.totalReferralEarnings += immediateReward;
@@ -309,12 +309,24 @@ class TasksHandler {
           .select('telegramId first_name last_name username');
       }
 
+      // Calculate actual total earnings from referralHistory (only count immediate referral rewards in PHMN)
+      // Exclude milestone rewards which are in Gold Pieces to avoid mixing units
+      const referralHistory = user.referralHistory || [];
+      const actualTotalEarnings = referralHistory.reduce((sum, entry) => {
+        // Only count 'first_game' type rewards (immediate referral rewards in PHMN)
+        // Milestone rewards are in Gold Pieces and should be excluded
+        if (entry.type === 'first_game') {
+          return sum + (entry.reward || 0);
+        }
+        return sum;
+      }, 0);
+
       callback({
         success: true,
         stats: {
           referralCode: user.referralCode,
           totalReferrals: user.totalReferrals,
-          totalEarnings: user.totalReferralEarnings,
+          totalEarnings: actualTotalEarnings, // Use calculated value from history
           referrals: referrals.map(ref => ({
             telegramId: ref.telegramId,
             name: ref.first_name || ref.last_name || ref.username || 'Unknown',
@@ -325,7 +337,7 @@ class TasksHandler {
             telegramId: referrer.telegramId,
             name: referrer.first_name || referrer.last_name || referrer.username || 'Unknown'
           } : null,
-          referralHistory: user.referralHistory || []
+          referralHistory: referralHistory
         }
       });
     } catch (error) {
@@ -364,7 +376,7 @@ class TasksHandler {
       }
 
       // Award the referral reward
-      const rewardAmount = 0.3;
+      const rewardAmount = 0.3; // 0.01 PHMN for first game
       user.PHMN = (user.PHMN || 0) + rewardAmount;
       user.totalReferralEarnings += rewardAmount;
       user.referralRewardsClaimed.push(parseInt(referralId));
