@@ -879,7 +879,7 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
                 <div className="text-xs text-gray-400">Friends Invited</div>
               </div>
               <div className="text-center p-2 bg-gray-800 rounded">
-                <div className="text-lg font-bold text-purple-600">{referralStats.totalEarnings}</div>
+                <div className="text-lg font-bold text-purple-600">{(referralStats.totalEarnings || 0).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })}</div>
                 <div className="text-xs text-gray-400">Total Rewards</div>
               </div>
             </div>
