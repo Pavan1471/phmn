@@ -54,7 +54,7 @@ const ReferralMonitor = ({ telegramUser, compact = false }) => {
             <div className="text-xs text-gray-400">Referrals</div>
           </div>
           <div className="text-center">
-            <div className="text-lg font-bold text-green-400">{referralStats.totalEarnings}</div>
+            <div className="text-lg font-bold text-green-400">{(referralStats.totalEarnings || 0).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} PHMN</div>
             <div className="text-xs text-gray-400">Earnings</div>
           </div>
         </div>
@@ -84,7 +84,7 @@ const ReferralMonitor = ({ telegramUser, compact = false }) => {
           <div className="text-sm text-gray-400">Total Referrals</div>
         </div>
         <div className="text-center p-4 bg-gray-800 rounded-lg">
-          <div className="text-2xl font-bold text-green-400">{referralStats.totalEarnings}</div>
+          <div className="text-2xl font-bold text-green-400">{(referralStats.totalEarnings || 0).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} PHMN</div>
           <div className="text-sm text-gray-400">Total Earnings</div>
         </div>
       </div>
