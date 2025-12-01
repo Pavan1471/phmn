@@ -459,23 +459,18 @@ function Upgrade() {
                 <div className="space-y-3">
                   {DURATION_OPTIONS.map((duration, index) => {
                     let tonAmount;
-                    let usdAmount;
                     switch (duration.id) {
                       case 'day':
                         tonAmount = boostData.dailyTON;
-                        usdAmount = boostData.dailyUSD;
                         break;
                       case 'week':
                         tonAmount = boostData.weeklyTON;
-                        usdAmount = boostData.weeklyUSD;
                         break;
                       case 'month':
                         tonAmount = boostData.monthlyTON;
-                        usdAmount = boostData.monthlyUSD;
                         break;
                       default:
                         tonAmount = 0;
-                        usdAmount = 0;
                     }
 
                     return (
