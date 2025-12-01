@@ -20,6 +20,8 @@ function Play() {
   const [pendingRewards, setPendingRewards] = useState(0);
   const [estimatedRewards, setEstimatedRewards] = useState(0);
   const [miningProgress, setMiningProgress] = useState(0); // 0-100%
+  const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [sessionEndTime, setSessionEndTime] = useState(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [showTimezoneModal, setShowTimezoneModal] = useState(false);
   const [selectedTimezone, setSelectedTimezone] = useState('');
@@ -297,7 +299,30 @@ function Play() {
           // Use effective mining rate (already includes boost multiplier if active)
           setMiningRate(response.miningRate || response.baseMiningRate || 0.00463);
           setMiningLevel(response.miningLevel || 1);
-          setPendingRewards(response.pendingRewards);
+          
+          // Store session times for client-side calculation
+          if (response.startTime && response.endTime) {
+            setSessionStartTime(new Date(response.startTime));
+            setSessionEndTime(new Date(response.endTime));
+          }
+          
+          // For completed sessions, use server value. For active sessions, calculate client-side
+          if (response.sessionStatus === 'completed') {
+            setPendingRewards(response.pendingRewards || 0);
+          } else if (response.sessionStatus === 'active' && response.startTime && response.endTime) {
+            // Calculate pending rewards client-side based on elapsed time
+            const startTime = new Date(response.startTime);
+            const endTime = new Date(response.endTime);
+            const now = new Date();
+            const elapsedHours = (now - startTime) / (1000 * 60 * 60);
+            const totalCycleHours = (endTime - startTime) / (1000 * 60 * 60);
+            const effectiveRate = response.miningRate || response.baseMiningRate || 0.00463;
+            const calculatedPending = Math.min(effectiveRate * totalCycleHours, effectiveRate * elapsedHours);
+            setPendingRewards(Math.max(0, calculatedPending));
+          } else {
+            setPendingRewards(response.pendingRewards || 0);
+          }
+          
           // CRITICAL: Always update balance from database PHMN value
           // This ensures balance always reflects the actual database value
           const dbPHMN = response.PHMN || 0;
@@ -361,7 +386,30 @@ function Play() {
                 // Use effective mining rate (already includes boost multiplier if active)
                 setMiningRate(response.miningRate || response.baseMiningRate || 0.00463);
                 setMiningLevel(response.miningLevel || 1);
-                setPendingRewards(response.pendingRewards);
+                
+                // Store session times for client-side calculation
+                if (response.startTime && response.endTime) {
+                  setSessionStartTime(new Date(response.startTime));
+                  setSessionEndTime(new Date(response.endTime));
+                }
+                
+                // For completed sessions, use server value. For active sessions, calculate client-side
+                if (response.sessionStatus === 'completed') {
+                  setPendingRewards(response.pendingRewards || 0);
+                } else if (response.sessionStatus === 'active' && response.startTime && response.endTime) {
+                  // Calculate pending rewards client-side based on elapsed time
+                  const startTime = new Date(response.startTime);
+                  const endTime = new Date(response.endTime);
+                  const now = new Date();
+                  const elapsedHours = (now - startTime) / (1000 * 60 * 60);
+                  const totalCycleHours = (endTime - startTime) / (1000 * 60 * 60);
+                  const effectiveRate = response.miningRate || response.baseMiningRate || 0.00463;
+                  const calculatedPending = Math.min(effectiveRate * totalCycleHours, effectiveRate * elapsedHours);
+                  setPendingRewards(Math.max(0, calculatedPending));
+                } else {
+                  setPendingRewards(response.pendingRewards || 0);
+                }
+                
                 // CRITICAL: Always sync balance from database PHMN value
                 const dbPHMN = response.PHMN || 0;
                 setBalance(dbPHMN);
@@ -646,12 +694,29 @@ function Play() {
           // Update state if session completed on server
           if (response.sessionStatus === 'completed' && miningState === 'active') {
             setMiningState('completed');
-            setPendingRewards(response.pendingRewards);
+            setPendingRewards(response.pendingRewards || 0);
             setRemainingTime(0);
           } else if (response.sessionStatus === 'active') {
             // Sync remaining time from server
             setRemainingTime(response.remainingTime);
-            setPendingRewards(response.pendingRewards);
+            // Store session times
+            if (response.startTime && response.endTime) {
+              setSessionStartTime(new Date(response.startTime));
+              setSessionEndTime(new Date(response.endTime));
+            }
+            // Calculate pending rewards client-side
+            if (response.startTime && response.endTime) {
+              const startTime = new Date(response.startTime);
+              const endTime = new Date(response.endTime);
+              const now = new Date();
+              const elapsedHours = (now - startTime) / (1000 * 60 * 60);
+              const totalCycleHours = (endTime - startTime) / (1000 * 60 * 60);
+              const effectiveRate = response.miningRate || response.baseMiningRate || 0.00463;
+              const calculatedPending = Math.min(effectiveRate * totalCycleHours, effectiveRate * elapsedHours);
+              setPendingRewards(Math.max(0, calculatedPending));
+            } else {
+              setPendingRewards(response.pendingRewards || 0);
+            }
           }
         }
       });
@@ -660,10 +725,9 @@ function Play() {
     return () => clearInterval(syncTimer);
   }, [miningState, appSocket, user]);
 
-  // Update pending rewards and progress during active mining (proportional to elapsed time)
-  // Note: This is handled by server status updates, but we keep this for local UI updates
+  // Update pending rewards and progress during active mining (real-time calculation)
   useEffect(() => {
-    if (miningState !== 'active' || remainingTime === 0) {
+    if (miningState !== 'active' || !sessionStartTime || !sessionEndTime) {
       if (miningState === 'completed') {
         setMiningProgress(100);
       } else {
@@ -672,10 +736,28 @@ function Play() {
       return;
     }
 
-    // Progress and rewards are now calculated server-side based on actual cycle duration
-    // This effect mainly handles local UI updates
-    // The server sends accurate pendingRewards in status updates
-  }, [miningState, remainingTime, miningRate]);
+    // Update pending rewards in real-time every second
+    const updateInterval = setInterval(() => {
+      const now = new Date();
+      const startTime = sessionStartTime;
+      const endTime = sessionEndTime;
+      
+      if (startTime && endTime) {
+        const elapsedHours = (now - startTime) / (1000 * 60 * 60);
+        const totalCycleHours = (endTime - startTime) / (1000 * 60 * 60);
+        const calculatedPending = Math.min(miningRate * totalCycleHours, miningRate * elapsedHours);
+        setPendingRewards(Math.max(0, calculatedPending));
+        
+        // Update progress
+        const totalSessionTime = (endTime - startTime) / 1000;
+        const elapsedTime = (now - startTime) / 1000;
+        const progress = Math.min(100, Math.max(0, (elapsedTime / totalSessionTime) * 100));
+        setMiningProgress(progress);
+      }
+    }, 1000); // Update every second
+
+    return () => clearInterval(updateInterval);
+  }, [miningState, sessionStartTime, sessionEndTime, miningRate]);
 
   const formatTime = (sec) => {
     const h = Math.floor(sec / 3600);
@@ -768,7 +850,7 @@ function Play() {
             onClick={claimRewards}
             className="mx-auto block -mt-8 w-full max-w-[280px] py-3 rounded-full bg-gradient-to-b from-[#10b981] to-[#059669] shadow-lg shadow-green-900/40 text-white relative z-50"
           >
-            Claim {pendingRewards.toLocaleString()} PHMN
+            Claim {(pendingRewards || 0).toLocaleString(undefined, { maximumFractionDigits: 3, minimumFractionDigits: 3 })} PHMN
         </button>
         )}
         {miningState === 'active' && (
@@ -840,7 +922,7 @@ function Play() {
           {/* Status/Claim button */}
           {miningState === 'active' && (
             <div className="px-4 py-2 rounded-xl bg-[#5d4b85] text-white text-xs whitespace-nowrap pl-3">
-              {pendingRewards.toLocaleString()} mined
+              {(pendingRewards || 0).toLocaleString(undefined, { maximumFractionDigits: 3, minimumFractionDigits: 3 })} mined
             </div>
           )}
           {miningState === 'completed' && (
@@ -850,7 +932,7 @@ function Play() {
           )}
           {miningState === 'idle' && (
             <div className="px-4 py-2 rounded-xl bg-gray-600 text-white text-xs whitespace-nowrap">
-              {estimatedRewards.toLocaleString()} PHMN
+              {estimatedRewards.toLocaleString(undefined, { maximumFractionDigits: 5, minimumFractionDigits: 5 })} PHMN
             </div>
           )}
         </div>
