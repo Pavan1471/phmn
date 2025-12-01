@@ -181,7 +181,7 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
         loadTasks(); 
         loadReferralStats(); 
         loadGameStats(); 
-        showNotification(res.message || `Task reward claimed! +${res.rewardAmount || 0} PHMN`); 
+        showNotification(res.message || `Task reward claimed! +${(res.rewardAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 5, minimumFractionDigits: 5 })} PHMN`); 
         
         // Reset button states for completed tasks
         if (taskId === 'join_channel') {
