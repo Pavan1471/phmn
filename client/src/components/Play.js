@@ -609,7 +609,7 @@ function Play() {
         }, 500);
         
         // Show success message
-        alert(`Successfully claimed ${response.claimedRewards.toLocaleString()} PHMN!`);
+        alert(`Successfully claimed ${response.claimedRewards.toLocaleString(undefined, { maximumFractionDigits: 5, minimumFractionDigits: 5 })} PHMN!`);
       } else {
         console.error('❌ Play: Failed to claim rewards:', response?.error);
         alert(response?.error || 'Failed to claim rewards');
@@ -711,7 +711,7 @@ function Play() {
               draggable="false"
             />
             <div className="text-3xl font-bold tracking-wider"> 
-              {balance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              {balance.toLocaleString(undefined, { maximumFractionDigits: 5, minimumFractionDigits: 3 })}
             </div>
           </div>
         </div>
