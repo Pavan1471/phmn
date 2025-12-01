@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import leftFrameImg from "../images/topnav/left frame.png";
 import middleTopImg from "../images/topnav/middle top.png";
 import middleBottomImg from "../images/topnav/middle bottom.png";
@@ -8,6 +9,8 @@ import topIconImg from "../images/topnav/top icon.png";
 import minerOptionsImg from "../images/miner-options.png";
 
 function TopNav({ user, energy, level, score, onTopPlayerClick, onOptionsClick }) {
+  const navigate = useNavigate();
+  
   return (
     <nav
       className="fixed top-0 left-0 right-0 z-50"
@@ -54,11 +57,11 @@ function TopNav({ user, energy, level, score, onTopPlayerClick, onOptionsClick }
           role="button"
           aria-label="Miner Options"
           tabIndex={0}
-          onClick={() => onOptionsClick && onOptionsClick()}
+          onClick={() => navigate('/upgrade')}
           onKeyDown={(event) => {
-            if ((event.key === "Enter" || event.key === " ") && onOptionsClick) {
+            if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
-              onOptionsClick();
+              navigate('/upgrade');
             }
           }}
           style={{
