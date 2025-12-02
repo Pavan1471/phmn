@@ -666,8 +666,9 @@ function Play() {
           });
         }, 500);
         
-        // Show success message
-        alert(`Successfully claimed ${response.claimedRewards.toLocaleString(undefined, { maximumFractionDigits: 5, minimumFractionDigits: 5 })} PHMN!`);
+        // Show success message - use pendingRewards as fallback if claimedRewards is 0 or undefined
+        const claimedAmount = response.claimedRewards || pendingRewards || 0;
+        alert(`Successfully claimed ${claimedAmount.toLocaleString(undefined, { maximumFractionDigits: 5, minimumFractionDigits: 5 })} PHMN!`);
       } else {
         console.error('❌ Play: Failed to claim rewards:', response?.error);
         alert(response?.error || 'Failed to claim rewards');
