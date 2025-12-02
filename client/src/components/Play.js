@@ -982,7 +982,7 @@ function Play() {
           )}
           {miningState === 'idle' && (
             <div className="px-4 py-2 rounded-xl bg-gray-600 text-white text-xs whitespace-nowrap">
-              {estimatedRewards.toLocaleString(undefined, { maximumFractionDigits: 5, minimumFractionDigits: 5 })} PHMN
+              ...
             </div>
           )}
         </div>
