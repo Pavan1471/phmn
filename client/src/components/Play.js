@@ -18,7 +18,6 @@ function Play() {
   const [miningRate, setMiningRate] = useState(0.00463); // PHMN per hour (default level 1)
   const [, setMiningLevel] = useState(1); // Current mining level
   const [pendingRewards, setPendingRewards] = useState(0);
-  const [estimatedRewards, setEstimatedRewards] = useState(0);
   const [miningProgress, setMiningProgress] = useState(0); // 0-100%
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [sessionEndTime, setSessionEndTime] = useState(null);
@@ -338,17 +337,6 @@ function Play() {
             console.log(`🚀 Active boost: ${response.activeBoost.mode} (${response.activeBoost.multiplier}x)`);
           }
           
-          // Calculate estimated rewards based on cycle duration (if available)
-          if (response.startTime && response.endTime) {
-            const startTime = new Date(response.startTime);
-            const endTime = new Date(response.endTime);
-            const cycleDurationHours = (endTime - startTime) / (1000 * 60 * 60);
-            setEstimatedRewards((response.miningRate || 0.00463) * cycleDurationHours);
-          } else {
-            // Fallback to 8 hours if cycle info not available
-            setEstimatedRewards((response.miningRate || 0.00463) * 8);
-          }
-          
           console.log('💾 Play: Balance updated from DB PHMN:', dbPHMN);
 
           // Calculate progress percentage (0-100%) based on actual cycle duration
@@ -616,7 +604,6 @@ function Play() {
         setMiningState('active');
         setMiningRate(response.miningRate || response.baseMiningRate || 0.00463);
         setMiningLevel(response.miningLevel || 1);
-        setEstimatedRewards(response.estimatedRewards);
         const endTime = new Date(response.endTime);
         const now = new Date();
         setRemainingTime(Math.max(0, Math.floor((endTime - now) / 1000)));
