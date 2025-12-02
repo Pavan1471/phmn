@@ -196,7 +196,7 @@ const fetchLeaderboard = useCallback(() => {
     const remainingPlayers = getFilteredPlayers().slice(3);
 
     return (
-      <div className="p-1 max-w-6xl mx-auto">
+      <div className="p-1 max-w-6xl mx-auto pb-32">
         {/* Top 3 Players Section */}
         {top3Players.length > 0 && (
           <div className="mb-6 px-3">
@@ -472,7 +472,7 @@ const fetchLeaderboard = useCallback(() => {
 
         {/* Tab Content */}
         <motion.div 
-          className="w-full"
+          className="w-full pb-32"
           variants={contentVariants}
         >
           {renderTabContent()}
