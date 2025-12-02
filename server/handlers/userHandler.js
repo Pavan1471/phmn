@@ -1407,7 +1407,7 @@ const registerUserHandlers = (socket) => {
 
       callback && callback({
         success: true,
-        claimedRewards: Math.floor(rewardsToClaim),
+        claimedRewards: rewardsToClaim,
         newBalance: updatedUser.PHMN || 0
       });
     } catch (error) {
