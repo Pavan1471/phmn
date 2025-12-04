@@ -47,9 +47,9 @@ const userSchema = new mongoose.Schema({
   // PHMN 
   PHMN: { type: Number, default: 0 },
   
-  // 8-hour mining(Play.js)
-  miningSessionStartTime: { type: Date, default: null }, // When the current 8-hour session started
-  miningSessionEndTime: { type: Date, default: null }, // When the current 8-hour session ends (startTime + 8 hours)
+  // 12-hour cycle mining(Play.js)
+  miningSessionStartTime: { type: Date, default: null }, // When the current 12-hour cycle session started
+  miningSessionEndTime: { type: Date, default: null }, // When the current 12-hour cycle session ends (startTime + cycle duration)
   miningSessionPendingRewards: { type: Number, default: 0 }, // earned but not yet claimed
   miningLevel: { type: Number, default: 1 }, // Mining level (1, 5, 10, 15, 20, 25, 30, 50)
   miningRate: { type: Number, default: 0.00463 }, // per hour (calculated from mining level)
@@ -57,7 +57,7 @@ const userSchema = new mongoose.Schema({
   
   // Adsgram integration - track ads watched per cycle
   adsWatchedForCycle: { type: Number, default: 0 }, // Number of ads watched for current cycle (0-1)
-  lastCycleWithAds: { type: Number, default: null }, // Last cycle number where ads were watched (1, 2, or 3)
+  lastCycleWithAds: { type: Number, default: null }, // Last cycle number where ads were watched (1 or 2)
   
   // Mining Boost System (Turbo 2x, Super 4x, Ultimate 6x)
   activeBoost: {
