@@ -881,7 +881,7 @@ const registerUserHandlers = (socket) => {
   });
 
   // ============================================
-  // 8-HOUR MINING SESSION HANDLERS (for Play.js)
+  // 12-HOUR CYCLE MINING SESSION HANDLERS (for Play.js)
   // ============================================
   
   // Helper function to get current time in user's timezone
@@ -922,7 +922,7 @@ const registerUserHandlers = (socket) => {
   };
   
   // Helper function to get current cycle and cycle end time based on user's timezone
-  // Cycles: 07:00-15:00 (8h), 15:00-21:00 (6h), 21:00-07:00 (10h)
+  // Cycles: 10:00-22:00 (12h), 22:00-10:00 (12h)
   const getCurrentCycle = (timezone) => {
     if (!timezone) {
       return { cycle: null, cycleEndTime: null, remainingSeconds: 0 };
@@ -953,17 +953,13 @@ const registerUserHandlers = (socket) => {
       let cycleEndHour, cycleEndMinute, cycleEndDay = day, cycleEndMonth = month, cycleEndYear = year;
       
       // Determine current cycle and calculate end time
-      if (currentHour >= 7 && currentHour < 15) {
-        // Cycle 1: 07:00 → 15:00
-        cycleEndHour = 15;
-        cycleEndMinute = 0;
-      } else if (currentHour >= 15 && currentHour < 21) {
-        // Cycle 2: 15:00 → 21:00
-        cycleEndHour = 21;
+      if (currentHour >= 10 && currentHour < 22) {
+        // Cycle 1: 10:00 → 22:00
+        cycleEndHour = 22;
         cycleEndMinute = 0;
       } else {
-        // Cycle 3: 21:00 → 07:00 (next day)
-        cycleEndHour = 7;
+        // Cycle 2: 22:00 → 10:00 (next day)
+        cycleEndHour = 10;
         cycleEndMinute = 0;
         // Handle day/month/year rollover
         const nextDay = new Date(year, month, day + 1);
@@ -976,8 +972,8 @@ const registerUserHandlers = (socket) => {
       // We need to find the UTC timestamp that, when formatted in the user's timezone, gives us cycleEndHour:cycleEndMinute
       // Use binary search approach for efficiency
       let cycleEndTimeFinal = null;
-      const cycleDurations = { 1: 8 * 3600, 2: 6 * 3600, 3: 10 * 3600 };
-      const currentCycle = currentHour >= 7 && currentHour < 15 ? 1 : (currentHour >= 15 && currentHour < 21 ? 2 : 3);
+      const cycleDurations = { 1: 12 * 3600, 2: 12 * 3600 };
+      const currentCycle = currentHour >= 10 && currentHour < 22 ? 1 : 2;
       
       // Start search from current time, going forward up to 24 hours
       let low = now.getTime();
@@ -1045,7 +1041,7 @@ const registerUserHandlers = (socket) => {
       const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
       
       return {
-        cycle: currentHour >= 7 && currentHour < 15 ? 1 : (currentHour >= 15 && currentHour < 21 ? 2 : 3),
+        cycle: currentHour >= 10 && currentHour < 22 ? 1 : 2,
         cycleEndTime: cycleEndTimeFinal,
         remainingSeconds: remainingSeconds
       };
@@ -1370,9 +1366,9 @@ const registerUserHandlers = (socket) => {
       
       // Check if there are rewards to claim
       if (user.miningSessionPendingRewards <= 0) {
-        // Calculate final rewards if not set using effective rate (fallback to 8 hours)
+        // Calculate final rewards if not set using effective rate (fallback to 12 hours)
         const totalCycleHours = (user.miningSessionEndTime - user.miningSessionStartTime) / (1000 * 60 * 60);
-        const finalRewards = effectiveMiningRate * (totalCycleHours || 8);
+        const finalRewards = effectiveMiningRate * (totalCycleHours || 12);
         user.miningSessionPendingRewards = finalRewards;
         await user.save();
       }
