@@ -1085,7 +1085,7 @@ const registerUserHandlers = (socket) => {
     }
   });
   
-  // Start a new mining session (cycle-based)
+  // Start a new mining session (12-hour session, can start anytime)
   socket.on('playMining:start', async (data, callback) => {
     try {
       const telegramId = data?.telegramId || socket.request.session?.telegramId;
@@ -1096,15 +1096,6 @@ const registerUserHandlers = (socket) => {
       const user = await User.findOne({ telegramId: parseInt(telegramId) });
       if (!user) {
         return callback && callback({ success: false, error: 'User not found' });
-      }
-
-      // Check if timezone is set, if not return error (client should set it first)
-      if (!user.timezone) {
-        return callback && callback({ 
-          success: false, 
-          error: 'Timezone not set',
-          requiresTimezone: true
-        });
       }
 
       // Check if there's an active session
@@ -1129,24 +1120,7 @@ const registerUserHandlers = (socket) => {
         }
       }
 
-      // Get current cycle based on user's timezone
-      const cycleInfo = getCurrentCycle(user.timezone);
-      
-      if (!cycleInfo.cycle || !cycleInfo.cycleEndTime) {
-        return callback && callback({ 
-          success: false, 
-          error: 'Failed to calculate mining cycle' 
-        });
-      }
-
-      // Check if ads have been watched for this cycle
-      // Reset ads watched if it's a new cycle
-      if (user.lastCycleWithAds !== cycleInfo.cycle) {
-        user.adsWatchedForCycle = 0;
-        user.lastCycleWithAds = null;
-      }
-
-      // Require 1 ad to be watched before starting mining
+      // Require 1 ad to be watched before starting mining (reset for new session)
       if (user.adsWatchedForCycle < 1) {
         return callback && callback({ 
           success: false, 
@@ -1157,15 +1131,16 @@ const registerUserHandlers = (socket) => {
         });
       }
 
-      // Start mining session - join current cycle
+      // Start mining session - 12 hours from now
       const startTime = new Date();
-      const endTime = cycleInfo.cycleEndTime; // Cycle end time
+      const endTime = new Date(startTime.getTime() + (12 * 60 * 60 * 1000)); // 12 hours from start
 
       user.miningSessionStartTime = startTime;
       user.miningSessionEndTime = endTime;
       user.miningSessionPendingRewards = 0; // Reset pending rewards
-      // Keep ads watched status for this cycle (will be reset when new cycle starts)
-      user.lastCycleWithAds = cycleInfo.cycle; // Mark that ads were watched for this cycle
+      // Reset ads watched when starting new session (user needs to watch ad for next session)
+      user.adsWatchedForCycle = 0;
+      user.lastCycleWithAds = null;
       await user.save();
 
       // Calculate effective mining rate (base rate * boost multiplier if active)
@@ -1179,15 +1154,15 @@ const registerUserHandlers = (socket) => {
         await user.save();
       }
       
-      // Calculate estimated rewards based on cycle duration using effective rate
-      const cycleDurationHours = cycleInfo.remainingSeconds / 3600;
-      const estimatedRewards = effectiveMiningRate * cycleDurationHours;
+      // Calculate estimated rewards for 12-hour session using effective rate
+      const sessionDurationHours = 12;
+      const estimatedRewards = effectiveMiningRate * sessionDurationHours;
+      const remainingSeconds = 12 * 60 * 60; // 12 hours in seconds
 
       console.log(`✅ Mining session started for user ${telegramId}:`, {
-        cycle: cycleInfo.cycle,
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
-        durationHours: cycleDurationHours.toFixed(2),
+        durationHours: sessionDurationHours,
         estimatedRewards: estimatedRewards.toFixed(2)
       });
 
@@ -1203,8 +1178,7 @@ const registerUserHandlers = (socket) => {
           multiplier: user.activeBoost.multiplier
         } : null,
         estimatedRewards: estimatedRewards,
-        cycle: cycleInfo.cycle,
-        remainingTime: cycleInfo.remainingSeconds
+        remainingTime: remainingSeconds
       });
     } catch (error) {
       console.error('Error starting mining session:', error);
@@ -1252,16 +1226,16 @@ const registerUserHandlers = (socket) => {
           const currentMiningLevel = user.miningLevel || 1;
           const effectiveMiningRate = getEffectiveMiningRate(user);
           
-          // Calculate earned rewards so far (proportional to time elapsed in cycle)
+          // Calculate earned rewards so far (proportional to time elapsed in session)
           const elapsedHours = (now - user.miningSessionStartTime) / (1000 * 60 * 60);
-          const totalCycleHours = (user.miningSessionEndTime - user.miningSessionStartTime) / (1000 * 60 * 60);
-          const totalRewards = effectiveMiningRate * totalCycleHours;
+          const totalSessionHours = (user.miningSessionEndTime - user.miningSessionStartTime) / (1000 * 60 * 60);
+          const totalRewards = effectiveMiningRate * totalSessionHours;
           pendingRewards = Math.min(totalRewards, effectiveMiningRate * elapsedHours);
           
           console.log('✅ playMining:status - Active session:', {
             remainingTime,
             elapsedHours: elapsedHours.toFixed(2),
-            totalCycleHours: totalCycleHours.toFixed(2),
+            totalSessionHours: totalSessionHours.toFixed(2),
             pendingRewards: Math.floor(pendingRewards)
           });
         } else {
@@ -1273,9 +1247,9 @@ const registerUserHandlers = (socket) => {
           const currentMiningLevel = user.miningLevel || 1;
           const effectiveMiningRate = getEffectiveMiningRate(user);
           
-          // Calculate final rewards based on actual cycle duration using effective rate
-          const totalCycleHours = (user.miningSessionEndTime - user.miningSessionStartTime) / (1000 * 60 * 60);
-          const calculatedRewards = effectiveMiningRate * totalCycleHours;
+          // Calculate final rewards based on actual session duration using effective rate
+          const totalSessionHours = (user.miningSessionEndTime - user.miningSessionStartTime) / (1000 * 60 * 60);
+          const calculatedRewards = effectiveMiningRate * totalSessionHours;
           
           // Always update pending rewards when session is completed
           if (user.miningSessionPendingRewards !== calculatedRewards) {
@@ -1367,8 +1341,8 @@ const registerUserHandlers = (socket) => {
       // Check if there are rewards to claim
       if (user.miningSessionPendingRewards <= 0) {
         // Calculate final rewards if not set using effective rate (fallback to 12 hours)
-        const totalCycleHours = (user.miningSessionEndTime - user.miningSessionStartTime) / (1000 * 60 * 60);
-        const finalRewards = effectiveMiningRate * (totalCycleHours || 12);
+        const totalSessionHours = (user.miningSessionEndTime - user.miningSessionStartTime) / (1000 * 60 * 60);
+        const finalRewards = effectiveMiningRate * (totalSessionHours || 12);
         user.miningSessionPendingRewards = finalRewards;
         await user.save();
       }
@@ -1437,47 +1411,16 @@ const registerUserHandlers = (socket) => {
         return callback && callback({ success: false, error: 'User not found' });
       }
 
-      // Check if timezone is set
-      if (!user.timezone) {
-        return callback && callback({ 
-          success: false, 
-          error: 'Timezone not set' 
-        });
-      }
-
-      // Get current cycle
-      const cycleInfo = getCurrentCycle(user.timezone);
-      if (!cycleInfo.cycle) {
-        return callback && callback({ 
-          success: false, 
-          error: 'Failed to calculate mining cycle' 
-        });
-      }
-
-      // Reset ads watched if it's a new cycle (only if lastCycleWithAds is set and different)
-      if (user.lastCycleWithAds !== null && user.lastCycleWithAds !== cycleInfo.cycle) {
-        console.log(`🔄 New cycle detected (${user.lastCycleWithAds} -> ${cycleInfo.cycle}), resetting ads watched`);
-        user.adsWatchedForCycle = 0;
-        user.lastCycleWithAds = null;
-      }
-
-      // Get current count before updating (for logging)
-      const previousCount = (user.lastCycleWithAds === cycleInfo.cycle) ? (user.adsWatchedForCycle || 0) : 0;
-
-      // If it's the same cycle and user already watched 1 ad, don't change it
-      if (user.lastCycleWithAds === cycleInfo.cycle && user.adsWatchedForCycle >= 1) {
-        console.log(`✅ User already watched 1 ad for cycle ${cycleInfo.cycle}, keeping count at 1`);
-        // Don't change anything, already at max
+      // Set ads watched to 1 (capped at 1 per session)
+      const previousCount = user.adsWatchedForCycle || 0;
+      
+      // If user already watched 1 ad, don't change it
+      if (user.adsWatchedForCycle >= 1) {
+        console.log(`✅ User already watched 1 ad, keeping count at 1`);
       } else {
-        // The frontend sends the total number of ads watched in this session (0-1)
-        // We should ADD this to the current count, but cap at 1
-        // This handles cases where user watches ads multiple times
-        const newCount = Math.min(1, previousCount + adsWatched);
-        
-        console.log(`📺 Updating ads count: ${previousCount} + ${adsWatched} = ${newCount} (capped at 1)`);
-        
-        user.adsWatchedForCycle = newCount;
-        user.lastCycleWithAds = cycleInfo.cycle;
+        // Mark ad as watched (cap at 1)
+        user.adsWatchedForCycle = Math.min(1, previousCount + adsWatched);
+        console.log(`📺 Updating ads count: ${previousCount} + ${adsWatched} = ${user.adsWatchedForCycle} (capped at 1)`);
       }
       
       await user.save();
@@ -1486,7 +1429,6 @@ const registerUserHandlers = (socket) => {
       const updatedUser = await User.findOne({ telegramId: parseInt(telegramId) });
 
       console.log(`✅ Ads marked as watched for user ${telegramId}:`, {
-        cycle: cycleInfo.cycle,
         adsWatched: updatedUser.adsWatchedForCycle,
         totalRequired: 1,
         previousCount: previousCount,
@@ -1497,7 +1439,6 @@ const registerUserHandlers = (socket) => {
         success: true,
         adsWatched: updatedUser.adsWatchedForCycle,
         adsRequired: 1,
-        cycle: cycleInfo.cycle,
         canStartMining: updatedUser.adsWatchedForCycle >= 1
       });
     } catch (error) {
@@ -1521,7 +1462,7 @@ const registerUserHandlers = (socket) => {
     }
   });
 
-  // Get ads status for current cycle
+  // Get ads status
   socket.on('ads:getStatus', async (data, callback) => {
     try {
       const telegramId = data?.telegramId || socket.request.session?.telegramId;
@@ -1534,48 +1475,11 @@ const registerUserHandlers = (socket) => {
         return callback && callback({ success: false, error: 'User not found' });
       }
 
-      // Check if timezone is set
-      if (!user.timezone) {
-        return callback && callback({ 
-          success: true,
-          adsWatched: 0,
-          adsRequired: 1,
-          cycle: null,
-          canStartMining: false
-        });
-      }
-
-      // Get current cycle
-      const cycleInfo = getCurrentCycle(user.timezone);
-      if (!cycleInfo.cycle) {
-        return callback && callback({ 
-          success: true,
-          adsWatched: 0,
-          adsRequired: 1,
-          cycle: null,
-          canStartMining: false
-        });
-      }
-
-      // Only reset ads watched if it's actually a different cycle (not just null)
-      // This prevents resetting when lastCycleWithAds is null but we're in the same cycle
-      // IMPORTANT: Don't save here unless we actually reset, to avoid unnecessary writes
-      let updatedUser = user;
-      if (user.lastCycleWithAds !== null && user.lastCycleWithAds !== cycleInfo.cycle) {
-        console.log(`🔄 ads:getStatus - New cycle detected (${user.lastCycleWithAds} -> ${cycleInfo.cycle}), resetting ads watched`);
-        user.adsWatchedForCycle = 0;
-        user.lastCycleWithAds = null;
-        await user.save();
-        // Reload after save
-        updatedUser = await User.findOne({ telegramId: parseInt(telegramId) });
-      }
-
       callback && callback({
         success: true,
-        adsWatched: updatedUser.adsWatchedForCycle || 0,
+        adsWatched: user.adsWatchedForCycle || 0,
         adsRequired: 1,
-        cycle: cycleInfo.cycle,
-        canStartMining: (updatedUser.adsWatchedForCycle || 0) >= 1
+        canStartMining: (user.adsWatchedForCycle || 0) >= 1
       });
     } catch (error) {
       console.error('Error getting ads status:', error);
