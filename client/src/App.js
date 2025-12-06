@@ -5,6 +5,7 @@ import Leaderboard from "./components/Leaderboard.js";
 import Wallet from "./components/Wallet";
 import Tasks from "./components/Tasks";
 import Upgrade from "./components/upgrade";
+import Admin from "./components/admin";
 import BottomNav from "./components/BottomNav";
 import TopNav from "./components/TopNav";
 import TonConnectTest from "./components/TonConnectTest";
@@ -517,6 +518,8 @@ function AppContent() {
       setSection("leaderboard");
     } else if (path.startsWith('/wallet')) {
       setSection("wallet");
+    } else if (path.startsWith('/admin')) {
+      setSection("admin");
     }
   }, [location.pathname]);
 
@@ -600,6 +603,7 @@ function AppContent() {
         <Route path="/upgrade" element={<Upgrade telegramUser={user} />} />
         <Route path="/leaderboard" element={<Leaderboard telegramUser={user} />} />
         <Route path="/wallet" element={<Wallet telegramUser={user} />} />
+        <Route path="/admin" element={<Admin />} />
                 <Route path="/test" element={<TonConnectTest />} />
               </Routes>
             </motion.div>
