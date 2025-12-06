@@ -1734,6 +1734,96 @@ const registerUserHandlers = (socket) => {
     }
   });
 
+  // Admin: Get mining cycle stats
+  socket.on('admin:getMiningStats', async (data, callback) => {
+    try {
+      const now = new Date();
+      
+      // Find all users with mining session data
+      const allMiners = await User.find({
+        miningSessionStartTime: { $ne: null },
+        miningSessionEndTime: { $ne: null }
+      }).select('telegramId first_name last_name username miningSessionStartTime miningSessionEndTime miningSessionPendingRewards miningRate miningLevel PHMN activeBoost miningRateBoostFromAds');
+
+      // Filter to only active sessions (endTime > now)
+      const activeSessions = allMiners.filter(user => {
+        if (!user.miningSessionStartTime || !user.miningSessionEndTime) return false;
+        return new Date(user.miningSessionEndTime) > now;
+      });
+
+      // Calculate total stats
+      const totalPlayers = activeSessions.length;
+      const totalMined = activeSessions.reduce((sum, user) => {
+        // Calculate pending rewards for each user
+        const startTime = new Date(user.miningSessionStartTime);
+        const endTime = new Date(user.miningSessionEndTime);
+        const elapsedHours = (now - startTime) / (1000 * 60 * 60);
+        const totalSessionHours = (endTime - startTime) / (1000 * 60 * 60);
+        
+        // Get effective mining rate (includes boost if active)
+        const baseRate = getMiningRateFromLevel(user.miningLevel || 1);
+        const effectiveRate = getEffectiveMiningRate(user);
+        
+        // Calculate mined amount (proportional to elapsed time)
+        const mined = Math.min(effectiveRate * totalSessionHours, effectiveRate * elapsedHours);
+        return sum + Math.max(0, mined);
+      }, 0);
+
+      // Prepare player list with details
+      const players = activeSessions.map(user => {
+        const startTime = new Date(user.miningSessionStartTime);
+        const endTime = new Date(user.miningSessionEndTime);
+        const elapsedHours = (now - startTime) / (1000 * 60 * 60);
+        const totalSessionHours = (endTime - startTime) / (1000 * 60 * 60);
+        const remainingHours = (endTime - now) / (1000 * 60 * 60);
+        
+        const baseRate = getMiningRateFromLevel(user.miningLevel || 1);
+        const effectiveRate = getEffectiveMiningRate(user); // Use the actual function to get effective rate
+        const mined = Math.min(effectiveRate * totalSessionHours, effectiveRate * elapsedHours);
+
+        return {
+          telegramId: user.telegramId,
+          name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || `User ${user.telegramId}`,
+          username: user.username,
+          miningLevel: user.miningLevel || 1,
+          miningRate: effectiveRate,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          remainingHours: Math.max(0, remainingHours),
+          mined: Math.max(0, mined),
+          totalPHMN: user.PHMN || 0
+        };
+      });
+
+      // Sort by mined amount (descending)
+      players.sort((a, b) => b.mined - a.mined);
+
+      // Calculate total PHMN balance of all users
+      const totalPHMNResult = await User.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalPHMN: { $sum: { $ifNull: ['$PHMN', 0] } }
+          }
+        }
+      ]);
+
+      const totalPHMNBalance = totalPHMNResult.length > 0 ? totalPHMNResult[0].totalPHMN : 0;
+
+      callback && callback({
+        success: true,
+        totalPlayers,
+        totalMined,
+        totalPHMNBalance,
+        players,
+        lastUpdated: now.toISOString()
+      });
+    } catch (error) {
+      console.error('Error getting admin mining stats:', error);
+      callback && callback({ success: false, error: error.message });
+    }
+  });
+
   // Handle socket disconnect
   socket.on('disconnect', () => {
     console.log(`🔌 Socket disconnected: ${socket.id}`);
