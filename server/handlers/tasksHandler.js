@@ -574,7 +574,7 @@ class TasksHandler {
         completed: user.discordJoinedRewardClaimed || false,
         progress: user.discordJoinedRewardClaimed ? 1 : 0,
         target: 1,
-        discordLink: 'https://discord.gg/zzJjEAjs'
+        discordLink: 'https://discord.gg/cSBCQhEECc'
       };
       tasks.push(discordTask);
 
