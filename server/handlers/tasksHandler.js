@@ -540,7 +540,7 @@ class TasksHandler {
       const channelTask = {
         id: 'join_channel',
         type: 'social',
-        title: 'Join Telegram Channel',
+        title: 'Join Telegram Group',
         description: '',
         reward: 0.3,
         completed: user.channelJoinedRewardClaimed || false,
@@ -574,7 +574,7 @@ class TasksHandler {
         completed: user.discordJoinedRewardClaimed || false,
         progress: user.discordJoinedRewardClaimed ? 1 : 0,
         target: 1,
-        discordLink: 'https://discord.gg/cSBCQhEECc'
+        discordLink: 'https://discord.gg/zzJjEAjs'
       };
       tasks.push(discordTask);
 
@@ -713,18 +713,7 @@ class TasksHandler {
             return callback({ success: false, error: 'Channel join reward already claimed' });
           }
           
-          // Verify channel membership before allowing claim
-          const isVerifiedMember = await this.verifyChannelMembership(telegramId);
-          
-          if (!isVerifiedMember) {
-            return callback({ 
-              success: false, 
-              error: 'Please join the channel first, then try claiming again.',
-              requiresVerification: true
-            });
-          }
-          
-          // Channel join reward: 0.3 PHMN
+          // Channel join reward: 0.3 PHMN (no verification required)
           rewardAmount = 0.3;
           user.channelJoinedRewardClaimed = true;
           user.PHMN = (user.PHMN || 0) + rewardAmount;
