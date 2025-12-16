@@ -620,10 +620,43 @@ function Play() {
     });
   };
 
-  // Claim mining rewards
-  const claimRewards = () => {
+  // Claim mining rewards (show 1 ad before claiming)
+  const claimRewards = async () => {
     if (!appSocket || !appSocket.connected || !user) {
       console.error('❌ Play: Cannot claim - socket or user not ready');
+      return;
+    }
+
+    // Require 1 ad view before allowing claim
+    if (!adsgramService.isReady()) {
+      alert('Ads are not available right now. Please try again later.');
+      return;
+    }
+
+    if (isShowingAds) {
+      // Prevent duplicate ad requests
+      return;
+    }
+
+    try {
+      setIsShowingAds(true);
+      setShowAdsModal(true);
+
+      const result = await adsgramService.showAds(1, () => {});
+
+      setShowAdsModal(false);
+      setIsShowingAds(false);
+
+      // If user didn't actually watch the ad, do not proceed with claim
+      if (!result || result.watched === 0) {
+        console.log('❌ Play: Claim ad was not watched, cancelling claim');
+        return;
+      }
+    } catch (error) {
+      console.error('❌ Play: Error showing ad before claim:', error);
+      setShowAdsModal(false);
+      setIsShowingAds(false);
+      alert('Error showing ad. Please try again.');
       return;
     }
 
