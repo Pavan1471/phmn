@@ -23,16 +23,16 @@ const getMiningRateFromLevel = (level) => {
 const getEffectiveMiningRate = (user) => {
   const baseRate = getMiningRateFromLevel(user.miningLevel || 1);
   let effectiveRate = baseRate;
-  
+
   // Apply boost from ads (cumulative percentage boost)
   const adsBoostMultiplier = 1 + (user.miningRateBoostFromAds || 0);
   effectiveRate = effectiveRate * adsBoostMultiplier;
-  
+
   // Check if user has an active boost that hasn't expired
   if (user.activeBoost && user.activeBoost.multiplier && user.activeBoost.endTime) {
     const now = new Date();
     const endTime = new Date(user.activeBoost.endTime);
-    
+
     // Boost is active if it hasn't expired
     if (now < endTime) {
       const boostMultiplier = user.activeBoost.multiplier || 1;
@@ -56,11 +56,11 @@ const getEffectiveMiningRate = (user) => {
       user.save().catch(err => console.error('Error clearing expired boost:', err));
     }
   }
-  
+
   if (user.miningRateBoostFromAds && user.miningRateBoostFromAds > 0) {
     console.log(`⚡ Ads boost active: ${baseRate.toFixed(5)} * ${adsBoostMultiplier.toFixed(3)} = ${effectiveRate.toFixed(5)} PHMN/hr`);
   }
-  
+
   return effectiveRate;
 };
 
@@ -95,7 +95,7 @@ const saveUserData = async (telegramUser) => {
 const getUserProfile = async (telegramId) => {
   try {
     const user = await User.findOne({ telegramId: parseInt(telegramId) });
-    
+
     if (!user) {
       throw new Error('User not found');
     }
@@ -118,10 +118,10 @@ const getUserProfile = async (telegramId) => {
 const searchUsers = async (searchTerm, excludeTelegramId) => {
   try {
     const searchRegex = new RegExp(searchTerm, 'i'); // Case-insensitive search
-    
+
     const users = await User.find({
       $and: [
-        { 
+        {
           $or: [
             { first_name: searchRegex },
             { last_name: searchRegex }
@@ -217,7 +217,7 @@ const acceptFriendRequest = async (userTelegramId, friendTelegramId) => {
 
     // Remove from friend requests
     user.friend_requests = user.friend_requests.filter(id => id !== parseInt(friendTelegramId));
-    
+
     // Add to friends list for both users
     if (!user.friends.includes(parseInt(friendTelegramId))) {
       user.friends.push(parseInt(friendTelegramId));
@@ -240,7 +240,7 @@ const acceptFriendRequest = async (userTelegramId, friendTelegramId) => {
 const rejectFriendRequest = async (userTelegramId, friendTelegramId) => {
   try {
     const user = await User.findOne({ telegramId: parseInt(userTelegramId) });
-    
+
     if (!user) {
       throw new Error('User not found');
     }
@@ -285,24 +285,24 @@ const getFriendsList = async (telegramId) => {
   try {
     const user = await User.findOne({ telegramId: parseInt(telegramId) });
     if (!user) return [];
-    
+
     // Manually fetch friend data instead of using populate
-    const friends = await User.find({ 
-      telegramId: { $in: user.friends } 
+    const friends = await User.find({
+      telegramId: { $in: user.friends }
     });
-    
+
     // Add online status to each friend
     const friendsWithStatus = friends.map(friend => ({
       ...friend.toObject(),
       isOnline: onlineUsers.has(friend.telegramId.toString())
     }));
-    
+
     console.log(`👥 Friends for user ${telegramId}:`, friendsWithStatus.map(f => ({
       name: f.first_name,
       telegramId: f.telegramId,
       isOnline: f.isOnline
     })));
-    
+
     return friendsWithStatus;
   } catch (error) {
     console.error('Error getting friends list:', error);
@@ -315,18 +315,18 @@ const getFriendRequests = async (telegramId) => {
   try {
     const user = await User.findOne({ telegramId: parseInt(telegramId) });
     if (!user) return [];
-    
+
     // Manually fetch friend request data instead of using populate
-    const requests = await User.find({ 
-      telegramId: { $in: user.friend_requests } 
+    const requests = await User.find({
+      telegramId: { $in: user.friend_requests }
     });
-    
+
     // Add online status to each request
     const requestsWithStatus = requests.map(request => ({
       ...request.toObject(),
       isOnline: onlineUsers.has(request.telegramId.toString())
     }));
-    
+
     return requestsWithStatus;
   } catch (error) {
     console.error('Error getting friend requests:', error);
@@ -386,7 +386,7 @@ const registerUserHandlers = (socket) => {
       onlineUsers.set(telegramId.toString(), socket.id);
       console.log(`👤 User ${telegramId} is now ONLINE (socket: ${socket.id})`);
       console.log(`📊 Current online users: ${onlineUsers.size}`);
-      
+
       // Notify friends that user is online
       notifyFriendsOnlineStatus(telegramId, true);
     }
@@ -397,7 +397,7 @@ const registerUserHandlers = (socket) => {
       onlineUsers.delete(telegramId.toString());
       console.log(`👤 User ${telegramId} is now OFFLINE`);
       console.log(`📊 Current online users: ${onlineUsers.size}`);
-      
+
       // Notify friends that user is offline
       notifyFriendsOnlineStatus(telegramId, false);
     }
@@ -450,22 +450,22 @@ const registerUserHandlers = (socket) => {
       console.log(`💾 Processing user:save for user: ${telegramUser.id}`);
       const user = await saveUserData(telegramUser);
       trackUserOnline(telegramUser.id);
-      
+
       // Update session with telegramId for room joining
       socket.request.session.telegramId = telegramUser.id;
       socket.request.session.save();
-      
+
       // Join user-specific room for invitations
       const userRoom = `user_${telegramUser.id}`;
       socket.join(userRoom);
       console.log(`👤 User ${telegramUser.id} joined user room: ${userRoom} after save`);
-      
+
       // Debug: Verify room membership
       const io = socketManager.getIO();
       const room = io.sockets.adapter.rooms.get(userRoom);
       console.log(`🔍 Room ${userRoom} exists after join:`, !!room);
       console.log(`🔍 Room ${userRoom} members after join:`, room ? room.size : 0);
-      
+
       socket.emit('user:saved', { success: true, user });
     } catch (error) {
       socket.emit('user:saved', { success: false, error: error.message });
@@ -476,7 +476,7 @@ const registerUserHandlers = (socket) => {
   socket.on('user:updateWalletAddress', async (data, callback) => {
     try {
       const { telegramId, walletAddress } = data;
-      
+
       if (!telegramId || !walletAddress) {
         console.log('❌ UserHandler: Missing telegramId or walletAddress');
         return callback && callback({
@@ -502,7 +502,7 @@ const registerUserHandlers = (socket) => {
       }
 
       console.log(`✅ UserHandler: Successfully updated wallet address for user ${telegramId}`);
-      
+
       callback && callback({
         success: true,
         walletAddress: walletAddress,
@@ -532,7 +532,7 @@ const registerUserHandlers = (socket) => {
   socket.on('user:getUserData', async (data, callback) => {
     try {
       const { telegramId } = data;
-      
+
       if (!telegramId) {
         return callback && callback({
           success: false,
@@ -541,9 +541,9 @@ const registerUserHandlers = (socket) => {
       }
 
       console.log(`🔍 UserHandler: Getting user data for: ${telegramId}`);
-      
+
       const user = await User.findOne({ telegramId: parseInt(telegramId) });
-      
+
       if (!user) {
         return callback && callback({
           success: false,
@@ -592,12 +592,12 @@ const registerUserHandlers = (socket) => {
   socket.on('users:searchByPublicId', async (data) => {
     try {
       console.log(`🔍 Searching for user by public ID: ${data.publicId}`);
-      
+
       const user = await searchUserByPublicId(data.publicId, data.excludeTelegramId);
 
       if (!user) {
-        socket.emit('users:searchByPublicId', { 
-          success: false, 
+        socket.emit('users:searchByPublicId', {
+          success: false,
           error: 'User not found',
           users: []
         });
@@ -614,14 +614,14 @@ const registerUserHandlers = (socket) => {
         isOnline: onlineUsers.has(user.telegramId.toString())
       };
 
-      socket.emit('users:searchByPublicId', { 
-        success: true, 
+      socket.emit('users:searchByPublicId', {
+        success: true,
         users: [userData]
       });
     } catch (error) {
       console.error('Error searching user by public ID:', error);
-      socket.emit('users:searchByPublicId', { 
-        success: false, 
+      socket.emit('users:searchByPublicId', {
+        success: false,
         error: error.message,
         users: []
       });
@@ -632,17 +632,17 @@ const registerUserHandlers = (socket) => {
   socket.on('users:getPublicId', async (data) => {
     try {
       console.log(`🔍 Getting public ID for user: ${data.telegramId}`);
-      
+
       const publicId = await generatePublicIdForUser(data.telegramId);
-      
-      socket.emit('users:publicId', { 
-        success: true, 
+
+      socket.emit('users:publicId', {
+        success: true,
         publicId: publicId
       });
     } catch (error) {
       console.error('Error getting public ID:', error);
-      socket.emit('users:publicId', { 
-        success: false, 
+      socket.emit('users:publicId', {
+        success: false,
         error: error.message
       });
     }
@@ -652,7 +652,7 @@ const registerUserHandlers = (socket) => {
   socket.on('friends:sendRequest', async (data) => {
     try {
       const result = await sendFriendRequest(data.fromTelegramId, data.toTelegramId);
-      
+
       // Send notification to the target user if they're online
       const targetRoom = `user_${data.toTelegramId}`;
       socketManager.getIO().to(targetRoom).emit('friend:requestReceived', {
@@ -665,7 +665,7 @@ const registerUserHandlers = (socket) => {
         },
         message: 'sent you a friend request'
       });
-      
+
       socket.emit('friends:requestSent', { success: true, ...result });
     } catch (error) {
       socket.emit('friends:requestSent', { success: false, error: error.message });
@@ -676,7 +676,7 @@ const registerUserHandlers = (socket) => {
   socket.on('friends:acceptRequest', async (data) => {
     try {
       const result = await acceptFriendRequest(data.userTelegramId, data.friendTelegramId);
-      
+
       // Notify the friend that their request was accepted
       const friendRoom = `user_${data.friendTelegramId}`;
       socketManager.getIO().to(friendRoom).emit('friend:requestAccepted', {
@@ -689,7 +689,7 @@ const registerUserHandlers = (socket) => {
         },
         message: 'accepted your friend request'
       });
-      
+
       socket.emit('friends:requestAccepted', { success: true, ...result });
     } catch (error) {
       socket.emit('friends:requestAccepted', { success: false, error: error.message });
@@ -744,40 +744,40 @@ const registerUserHandlers = (socket) => {
       console.log('📤 From user:', data.fromTelegramId);
       console.log('📥 To user:', data.toTelegramId);
       console.log('🏠 Room ID:', data.roomId);
-      
+
       const result = await sendLobbyInvitation(
-        data.fromTelegramId, 
-        data.toTelegramId, 
-        data.roomId, 
+        data.fromTelegramId,
+        data.toTelegramId,
+        data.roomId,
         data.roomName
       );
-      
+
       // Emit to the inviting user
       socket.emit('lobby:invitationSent', { success: true, ...result });
-      
+
       // Emit to the invited user (if they're online) - FIXED: Use proper socket emission
       const invitedUserRoom = `user_${data.toTelegramId}`;
       console.log(`📤 Sending invitation to room: ${invitedUserRoom}`);
-      
+
       // Debug: Check if the room exists and has members
       const io = socketManager.getIO();
       const room = io.sockets.adapter.rooms.get(invitedUserRoom);
       console.log(`🔍 Room ${invitedUserRoom} exists:`, !!room);
       console.log(`🔍 Room ${invitedUserRoom} members:`, room ? room.size : 0);
-      
+
       // Debug: List all rooms to see what's available
       console.log('🔍 All available rooms:', Array.from(io.sockets.adapter.rooms.keys()));
-      
+
       // Debug: Check if the target user is online
       const isTargetOnline = onlineUsers.has(data.toTelegramId.toString());
       console.log(`🔍 Target user ${data.toTelegramId} online status:`, isTargetOnline);
       console.log(`🔍 Online users map:`, Array.from(onlineUsers.entries()));
-      
+
       // Debug: Check if the target user's socket is in the room
       if (room) {
         const roomSockets = Array.from(room);
         console.log(`🔍 Sockets in room ${invitedUserRoom}:`, roomSockets);
-        
+
         // Check if any of these sockets belong to the target user
         for (const socketId of roomSockets) {
           const socket = io.sockets.sockets.get(socketId);
@@ -786,17 +786,144 @@ const registerUserHandlers = (socket) => {
           }
         }
       }
-      
+
       console.log('📤 About to emit lobby:invitationReceived to room:', invitedUserRoom);
       socketManager.getIO().to(invitedUserRoom).emit('lobby:invitationReceived', {
         success: true,
         invitation: result.invitation
       });
       console.log('✅ Invitation emission completed');
-      
+
     } catch (error) {
       console.error('❌ Error sending lobby invitation:', error);
       socket.emit('lobby:invitationSent', { success: false, error: error.message });
+    }
+  });
+
+  // Get Daily Streak Status
+  socket.on('user:getDailyStreak', async (telegramId) => {
+    try {
+      const user = await User.findOne({ telegramId: parseInt(telegramId) });
+      if (!user) {
+        socket.emit('user:dailyStreakStatus', { success: false, error: 'User not found' });
+        return;
+      }
+
+      // Rewards configuration
+      const rewards = [0.1, 0.3, 0.6, 0.9, 1.3, 1.6, 2.0];
+
+      const now = new Date();
+      const lastClaim = user.lastDailyReward ? new Date(user.lastDailyReward) : null;
+
+      let streak = user.dailyStreak || 0;
+      let canClaim = false;
+
+      if (!lastClaim) {
+        // First time ever
+        canClaim = true;
+        streak = 0;
+      } else {
+        // Check days difference
+        // Reset hours to compare dates only
+        const today = new Date(now.setHours(0, 0, 0, 0));
+        const lastClaimDate = new Date(new Date(lastClaim).setHours(0, 0, 0, 0));
+
+        const diffTime = Math.abs(today - lastClaimDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) {
+          // Already claimed today
+          canClaim = false;
+        } else if (diffDays === 1) {
+          // Consecutive day
+          canClaim = true;
+        } else {
+          // Missed more than 1 day
+          canClaim = true;
+          streak = 0; // Reset streak
+        }
+      }
+
+      // If cycle is complete (7 days), reset to 0
+      if (streak >= 7) {
+        streak = 0;
+      }
+
+      socket.emit('user:dailyStreakStatus', {
+        success: true,
+        streak,
+        canClaim,
+        reward: rewards[streak],
+        nextReward: rewards[streak] || rewards[0],
+        lastClaimDate: user.lastDailyReward
+      });
+    } catch (error) {
+      console.error('Error checking streak:', error);
+      socket.emit('user:dailyStreakStatus', { success: false, error: error.message });
+    }
+  });
+
+  // Claim Daily Streak
+  socket.on('user:claimDailyStreak', async (telegramId) => {
+    try {
+      const user = await User.findOne({ telegramId: parseInt(telegramId) });
+      if (!user) {
+        socket.emit('user:dailyStreakClaimed', { success: false, error: 'User not found' });
+        return;
+      }
+
+      const rewards = [0.1, 0.3, 0.6, 0.9, 1.3, 1.6, 2.0];
+
+      const now = new Date();
+      const lastClaim = user.lastDailyReward ? new Date(user.lastDailyReward) : null;
+
+      let streak = user.dailyStreak || 0;
+
+      // Validation logic same as above to ensure integrity
+      if (lastClaim) {
+        const today = new Date(now.setHours(0, 0, 0, 0));
+        const lastClaimDate = new Date(new Date(lastClaim).setHours(0, 0, 0, 0));
+        const diffTime = Math.abs(today - lastClaimDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) {
+          return socket.emit('user:dailyStreakClaimed', { success: false, error: 'Already claimed today' });
+        } else if (diffDays > 1) {
+          streak = 0; // Reset
+        }
+      } else {
+        streak = 0;
+      }
+
+      if (streak >= 7) {
+        streak = 0;
+      }
+
+      const rewardAmount = rewards[streak];
+
+      // Update User
+      user.PHMN = (user.PHMN || 0) + rewardAmount;
+      user.dailyStreak = streak + 1;
+      user.lastDailyReward = new Date();
+      // Reset streak to 0 if we just claimed day 7 (so streak becomes 7 but next check will see days > 1 or cycle handling)
+      // Actually simpler: cycle is 0-6. If we just claimed index 6 (Day 7), dailyStreak becomes 7. 
+      // Next time check: if streak >= 7 -> streak = 0. Correct.
+
+      await user.save();
+
+      console.log(`✅ User ${telegramId} claimed daily streak day ${streak + 1} (${rewardAmount} PHMN)`);
+
+      socket.emit('user:dailyStreakClaimed', {
+        success: true,
+        reward: rewardAmount,
+        newBalance: user.PHMN,
+        nextStreak: user.dailyStreak,
+        message: `Claimed ${rewardAmount} PHMN!`
+      });
+
+    } catch (error) {
+      console.error('Error claiming streak:', error);
+      socket.emit('user:dailyStreakClaimed', { success: false, error: error.message });
     }
   });
 
@@ -804,10 +931,10 @@ const registerUserHandlers = (socket) => {
   socket.on('lobby:acceptInvitation', async (data) => {
     try {
       console.log('✅ Accepting lobby invitation:', data);
-      
+
       // Join the room
       socket.join(data.roomId);
-      
+
       // Emit to the inviting user that invitation was accepted - FIXED: Use proper room emission
       const roomName = `room_${data.roomId}`;
       console.log(`📤 Notifying room: ${roomName} about accepted invitation`);
@@ -815,9 +942,9 @@ const registerUserHandlers = (socket) => {
         success: true,
         invitedUser: data.invitedUser
       });
-      
+
       socket.emit('lobby:invitationAccepted', { success: true });
-      
+
     } catch (error) {
       console.error('❌ Error accepting lobby invitation:', error);
       socket.emit('lobby:invitationAccepted', { success: false, error: error.message });
@@ -828,7 +955,7 @@ const registerUserHandlers = (socket) => {
   socket.on('lobby:rejectInvitation', async (data) => {
     try {
       console.log('❌ Rejecting lobby invitation:', data);
-      
+
       // Emit to the inviting user that invitation was rejected - FIXED: Use proper room emission
       const roomName = `room_${data.roomId}`;
       console.log(`📤 Notifying room: ${roomName} about rejected invitation`);
@@ -836,9 +963,9 @@ const registerUserHandlers = (socket) => {
         success: true,
         invitedUser: data.invitedUser
       });
-      
+
       socket.emit('lobby:invitationRejected', { success: true });
-      
+
     } catch (error) {
       console.error('❌ Error rejecting lobby invitation:', error);
       socket.emit('lobby:invitationRejected', { success: false, error: error.message });
@@ -852,13 +979,13 @@ const registerUserHandlers = (socket) => {
     try {
       console.log('🧪 Test invitation sending:', data);
       const invitedUserRoom = `user_${data.toTelegramId}`;
-      
+
       // Debug: Check room and send test invitation
       const io = socketManager.getIO();
       const room = io.sockets.adapter.rooms.get(invitedUserRoom);
       console.log(`🧪 Test - Room ${invitedUserRoom} exists:`, !!room);
       console.log(`🧪 Test - Room ${invitedUserRoom} members:`, room ? room.size : 0);
-      
+
       socketManager.getIO().to(invitedUserRoom).emit('lobby:invitationReceived', {
         success: true,
         invitation: {
@@ -873,7 +1000,7 @@ const registerUserHandlers = (socket) => {
           timestamp: new Date()
         }
       });
-      
+
       console.log('🧪 Test invitation sent successfully');
     } catch (error) {
       console.error('🧪 Test invitation error:', error);
@@ -883,14 +1010,14 @@ const registerUserHandlers = (socket) => {
   // ============================================
   // 12-HOUR CYCLE MINING SESSION HANDLERS (for Play.js)
   // ============================================
-  
+
   // Helper function to get current time in user's timezone
   const getCurrentTimeInTimezone = (timezone) => {
     if (!timezone) {
       // Default to UTC if no timezone set
       return new Date();
     }
-    
+
     try {
       // Get current time in user's timezone
       const now = new Date();
@@ -904,7 +1031,7 @@ const registerUserHandlers = (socket) => {
         second: '2-digit',
         hour12: false
       });
-      
+
       const parts = formatter.formatToParts(now);
       const year = parseInt(parts.find(p => p.type === 'year').value);
       const month = parseInt(parts.find(p => p.type === 'month').value) - 1;
@@ -912,7 +1039,7 @@ const registerUserHandlers = (socket) => {
       const hour = parseInt(parts.find(p => p.type === 'hour').value);
       const minute = parseInt(parts.find(p => p.type === 'minute').value);
       const second = parseInt(parts.find(p => p.type === 'second').value);
-      
+
       // Create date in UTC that represents the local time in user's timezone
       return new Date(Date.UTC(year, month, day, hour, minute, second));
     } catch (error) {
@@ -920,17 +1047,17 @@ const registerUserHandlers = (socket) => {
       return new Date();
     }
   };
-  
+
   // Helper function to get current cycle and cycle end time based on user's timezone
   // Cycles: 10:00-22:00 (12h), 22:00-10:00 (12h)
   const getCurrentCycle = (timezone) => {
     if (!timezone) {
       return { cycle: null, cycleEndTime: null, remainingSeconds: 0 };
     }
-    
+
     try {
       const now = new Date();
-      
+
       // Get current date/time components in user's timezone
       const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: timezone,
@@ -942,16 +1069,16 @@ const registerUserHandlers = (socket) => {
         second: '2-digit',
         hour12: false
       });
-      
+
       const parts = formatter.formatToParts(now);
       const year = parseInt(parts.find(p => p.type === 'year').value);
       const month = parseInt(parts.find(p => p.type === 'month').value) - 1;
       const day = parseInt(parts.find(p => p.type === 'day').value);
       const currentHour = parseInt(parts.find(p => p.type === 'hour').value);
       const currentMinute = parseInt(parts.find(p => p.type === 'minute').value);
-      
+
       let cycleEndHour, cycleEndMinute, cycleEndDay = day, cycleEndMonth = month, cycleEndYear = year;
-      
+
       // Determine current cycle and calculate end time
       if (currentHour >= 10 && currentHour < 22) {
         // Cycle 1: 10:00 → 22:00
@@ -967,20 +1094,20 @@ const registerUserHandlers = (socket) => {
         cycleEndMonth = nextDay.getMonth();
         cycleEndYear = nextDay.getFullYear();
       }
-      
+
       // Calculate cycle end time in UTC
       // We need to find the UTC timestamp that, when formatted in the user's timezone, gives us cycleEndHour:cycleEndMinute
       // Use binary search approach for efficiency
       let cycleEndTimeFinal = null;
       const cycleDurations = { 1: 12 * 3600, 2: 12 * 3600 };
       const currentCycle = currentHour >= 10 && currentHour < 22 ? 1 : 2;
-      
+
       // Start search from current time, going forward up to 24 hours
       let low = now.getTime();
       let high = now.getTime() + 24 * 60 * 60 * 1000;
       let bestMatch = null;
       let bestDiff = Infinity;
-      
+
       // Binary search for the cycle end time
       for (let i = 0; i < 20; i++) {
         const mid = Math.floor((low + high) / 2);
@@ -994,17 +1121,17 @@ const registerUserHandlers = (socket) => {
           minute: '2-digit',
           hour12: false
         }).formatToParts(candidate);
-        
+
         const candidateHour = parseInt(candidateParts.find(p => p.type === 'hour').value);
         const candidateDay = parseInt(candidateParts.find(p => p.type === 'day').value);
         const candidateMonth = parseInt(candidateParts.find(p => p.type === 'month').value) - 1;
         const candidateYear = parseInt(candidateParts.find(p => p.type === 'year').value);
-        
+
         // Check if this is our target time
-        if (candidateHour === cycleEndHour && 
-            candidateDay === cycleEndDay && 
-            candidateMonth === cycleEndMonth && 
-            candidateYear === cycleEndYear) {
+        if (candidateHour === cycleEndHour &&
+          candidateDay === cycleEndDay &&
+          candidateMonth === cycleEndMonth &&
+          candidateYear === cycleEndYear) {
           const diff = Math.abs(candidate.getTime() - now.getTime());
           if (diff < bestDiff) {
             bestDiff = diff;
@@ -1020,7 +1147,7 @@ const registerUserHandlers = (socket) => {
           // Compare to determine search direction
           const candidateTime = candidateYear * 100000000 + candidateMonth * 1000000 + candidateDay * 10000 + candidateHour * 100 + parseInt(candidateParts.find(p => p.type === 'minute').value);
           const targetTime = cycleEndYear * 100000000 + cycleEndMonth * 1000000 + cycleEndDay * 10000 + cycleEndHour * 100;
-          
+
           if (candidateTime < targetTime) {
             low = mid + 1;
           } else {
@@ -1028,18 +1155,18 @@ const registerUserHandlers = (socket) => {
           }
         }
       }
-      
+
       if (bestMatch) {
         cycleEndTimeFinal = bestMatch;
       } else {
         // Fallback: calculate based on current time and cycle duration
         cycleEndTimeFinal = new Date(now.getTime() + cycleDurations[currentCycle] * 1000);
       }
-      
+
       // Calculate remaining seconds until cycle end
       const remainingMs = cycleEndTimeFinal.getTime() - now.getTime();
       const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
-      
+
       return {
         cycle: currentHour >= 10 && currentHour < 22 ? 1 : 2,
         cycleEndTime: cycleEndTimeFinal,
@@ -1050,7 +1177,7 @@ const registerUserHandlers = (socket) => {
       return { cycle: null, cycleEndTime: null, remainingSeconds: 0 };
     }
   };
-  
+
   // Helper function to set user timezone
   socket.on('user:setTimezone', async (data, callback) => {
     try {
@@ -1058,22 +1185,22 @@ const registerUserHandlers = (socket) => {
       if (!telegramId) {
         return callback && callback({ success: false, error: 'Not authenticated' });
       }
-      
+
       const { timezone } = data;
       if (!timezone) {
         return callback && callback({ success: false, error: 'Timezone is required' });
       }
-      
+
       const user = await User.findOne({ telegramId: parseInt(telegramId) });
       if (!user) {
         return callback && callback({ success: false, error: 'User not found' });
       }
-      
+
       user.timezone = timezone;
       await user.save();
-      
+
       console.log(`✅ User ${telegramId} timezone set to: ${timezone}`);
-      
+
       callback && callback({
         success: true,
         timezone: timezone,
@@ -1084,7 +1211,7 @@ const registerUserHandlers = (socket) => {
       callback && callback({ success: false, error: error.message });
     }
   });
-  
+
   // Start a new mining session (12-hour session, can start anytime)
   socket.on('playMining:start', async (data, callback) => {
     try {
@@ -1103,17 +1230,17 @@ const registerUserHandlers = (socket) => {
         const now = new Date();
         if (now < user.miningSessionEndTime) {
           // Session still active
-          return callback && callback({ 
-            success: false, 
+          return callback && callback({
+            success: false,
             error: 'Mining session already in progress',
             sessionStatus: 'active'
           });
         }
-        
+
         // Session completed but not claimed
         if (user.miningSessionPendingRewards > 0) {
-          return callback && callback({ 
-            success: false, 
+          return callback && callback({
+            success: false,
             error: 'Please claim your previous mining rewards before starting a new session',
             sessionStatus: 'completed'
           });
@@ -1122,8 +1249,8 @@ const registerUserHandlers = (socket) => {
 
       // Require 1 ad to be watched before starting mining (reset for new session)
       if (user.adsWatchedForCycle < 1) {
-        return callback && callback({ 
-          success: false, 
+        return callback && callback({
+          success: false,
           error: 'Please watch 1 ad before starting mining',
           requiresAds: true,
           adsWatched: user.adsWatchedForCycle || 0,
@@ -1147,13 +1274,13 @@ const registerUserHandlers = (socket) => {
       const currentMiningLevel = user.miningLevel || 1;
       const baseMiningRate = getMiningRateFromLevel(currentMiningLevel);
       const effectiveMiningRate = getEffectiveMiningRate(user);
-      
+
       // Update base mining rate if it doesn't match the level (store base rate, not boosted)
       if (user.miningRate !== baseMiningRate) {
         user.miningRate = baseMiningRate;
         await user.save();
       }
-      
+
       // Calculate estimated rewards for 12-hour session using effective rate
       const sessionDurationHours = 12;
       const estimatedRewards = effectiveMiningRate * sessionDurationHours;
@@ -1221,17 +1348,17 @@ const registerUserHandlers = (socket) => {
           // Session active
           sessionStatus = 'active';
           remainingTime = Math.max(0, Math.floor((user.miningSessionEndTime - now) / 1000));
-          
+
           // Calculate effective mining rate (base rate * boost multiplier if active)
           const currentMiningLevel = user.miningLevel || 1;
           const effectiveMiningRate = getEffectiveMiningRate(user);
-          
+
           // Calculate earned rewards so far (proportional to time elapsed in session)
           const elapsedHours = (now - user.miningSessionStartTime) / (1000 * 60 * 60);
           const totalSessionHours = (user.miningSessionEndTime - user.miningSessionStartTime) / (1000 * 60 * 60);
           const totalRewards = effectiveMiningRate * totalSessionHours;
           pendingRewards = Math.min(totalRewards, effectiveMiningRate * elapsedHours);
-          
+
           console.log('✅ playMining:status - Active session:', {
             remainingTime,
             elapsedHours: elapsedHours.toFixed(2),
@@ -1242,22 +1369,22 @@ const registerUserHandlers = (socket) => {
           // Session completed
           sessionStatus = 'completed';
           remainingTime = 0;
-          
+
           // Calculate effective mining rate (base rate * boost multiplier if active)
           const currentMiningLevel = user.miningLevel || 1;
           const effectiveMiningRate = getEffectiveMiningRate(user);
-          
+
           // Calculate final rewards based on actual session duration using effective rate
           const totalSessionHours = (user.miningSessionEndTime - user.miningSessionStartTime) / (1000 * 60 * 60);
           const calculatedRewards = effectiveMiningRate * totalSessionHours;
-          
+
           // Always update pending rewards when session is completed
           if (user.miningSessionPendingRewards !== calculatedRewards) {
             user.miningSessionPendingRewards = calculatedRewards;
             await user.save();
             console.log('💾 playMining:status - Updated pending rewards to:', calculatedRewards);
           }
-          
+
           pendingRewards = user.miningSessionPendingRewards;
           console.log('✅ playMining:status - Completed session, pending rewards:', pendingRewards);
         }
@@ -1267,21 +1394,21 @@ const registerUserHandlers = (socket) => {
 
       // CRITICAL: Always get fresh PHMN value from database
       const userPHMN = user.PHMN || 0;
-      
+
       // Calculate effective mining rate (base rate * boost multiplier if active)
       const currentMiningLevel = user.miningLevel || 1;
       const baseMiningRate = getMiningRateFromLevel(currentMiningLevel);
       const effectiveMiningRate = getEffectiveMiningRate(user);
-      
+
       // Update base mining rate if it doesn't match the level (store base rate, not boosted)
       if (user.miningRate !== baseMiningRate) {
         user.miningRate = baseMiningRate;
         await user.save();
       }
-      
+
       // Check if boost is active
       const isBoostActive = user.activeBoost && user.activeBoost.endTime && new Date() < new Date(user.activeBoost.endTime);
-      
+
       const response = {
         success: true,
         sessionStatus,
@@ -1337,7 +1464,7 @@ const registerUserHandlers = (socket) => {
       // Calculate effective mining rate (base rate * boost multiplier if active)
       const currentMiningLevel = user.miningLevel || 1;
       const effectiveMiningRate = getEffectiveMiningRate(user);
-      
+
       // Check if there are rewards to claim
       if (user.miningSessionPendingRewards <= 0) {
         // Calculate final rewards if not set using effective rate (fallback to 12 hours)
@@ -1358,12 +1485,12 @@ const registerUserHandlers = (socket) => {
       // Add rewards to PHMN balance
       const previousPHMN = user.PHMN || 0;
       user.PHMN = previousPHMN + rewardsToClaim;
-      
+
       // Clear session data
       user.miningSessionStartTime = null;
       user.miningSessionEndTime = null;
       user.miningSessionPendingRewards = 0;
-      
+
       await user.save();
 
       console.log('✅ playMining:claim - Rewards claimed successfully:', {
@@ -1397,12 +1524,12 @@ const registerUserHandlers = (socket) => {
 
       const { adsWatched } = data;
       console.log(`📥 ads:markWatched received for user ${telegramId}:`, { adsWatched, data });
-      
+
       if (typeof adsWatched !== 'number' || adsWatched < 1 || adsWatched > 1) {
         console.error(`❌ ads:markWatched - Invalid count: ${adsWatched} (must be 1)`);
-        return callback && callback({ 
-          success: false, 
-          error: 'Invalid ads watched count. Must be 1.' 
+        return callback && callback({
+          success: false,
+          error: 'Invalid ads watched count. Must be 1.'
         });
       }
 
@@ -1413,7 +1540,7 @@ const registerUserHandlers = (socket) => {
 
       // Set ads watched to 1 (capped at 1 per session)
       const previousCount = user.adsWatchedForCycle || 0;
-      
+
       // If user already watched 1 ad, don't change it
       if (user.adsWatchedForCycle >= 1) {
         console.log(`✅ User already watched 1 ad, keeping count at 1`);
@@ -1422,7 +1549,7 @@ const registerUserHandlers = (socket) => {
         user.adsWatchedForCycle = Math.min(1, previousCount + adsWatched);
         console.log(`📺 Updating ads count: ${previousCount} + ${adsWatched} = ${user.adsWatchedForCycle} (capped at 1)`);
       }
-      
+
       await user.save();
 
       // Reload user to ensure we have the latest data
@@ -1522,9 +1649,9 @@ const registerUserHandlers = (socket) => {
       // Check if user has enough PHMN to unlock (but don't deduct)
       const userPHMN = user.PHMN || 0;
       if (userPHMN < levelData.coinsNeeded) {
-        return callback && callback({ 
-          success: false, 
-          error: `You need at least ${levelData.coinsNeeded} PHMN to unlock this level.` 
+        return callback && callback({
+          success: false,
+          error: `You need at least ${levelData.coinsNeeded} PHMN to unlock this level.`
         });
       }
 
@@ -1557,11 +1684,11 @@ const registerUserHandlers = (socket) => {
       }
 
       const { mode, duration, multiplier, tonAmount, usdAmount, transactionHash } = data;
-      
+
       if (!mode || !duration || !multiplier || !tonAmount || !usdAmount || !transactionHash) {
-        return callback && callback({ 
-          success: false, 
-          error: 'Missing required boost purchase data' 
+        return callback && callback({
+          success: false,
+          error: 'Missing required boost purchase data'
         });
       }
 
@@ -1650,7 +1777,7 @@ const registerUserHandlers = (socket) => {
   socket.on('rank:getStats', async (telegramId) => {
     try {
       const user = await User.findOne({ telegramId: parseInt(telegramId) });
-      
+
       if (!user) {
         // Return default stats if user doesn't exist
         if (socket.connected) {
@@ -1738,7 +1865,7 @@ const registerUserHandlers = (socket) => {
   socket.on('admin:getMiningStats', async (data, callback) => {
     try {
       const now = new Date();
-      
+
       // Find all users with mining session data
       const allMiners = await User.find({
         miningSessionStartTime: { $ne: null },
@@ -1759,11 +1886,11 @@ const registerUserHandlers = (socket) => {
         const endTime = new Date(user.miningSessionEndTime);
         const elapsedHours = (now - startTime) / (1000 * 60 * 60);
         const totalSessionHours = (endTime - startTime) / (1000 * 60 * 60);
-        
+
         // Get effective mining rate (includes boost if active)
         const baseRate = getMiningRateFromLevel(user.miningLevel || 1);
         const effectiveRate = getEffectiveMiningRate(user);
-        
+
         // Calculate mined amount (proportional to elapsed time)
         const mined = Math.min(effectiveRate * totalSessionHours, effectiveRate * elapsedHours);
         return sum + Math.max(0, mined);
@@ -1776,7 +1903,7 @@ const registerUserHandlers = (socket) => {
         const elapsedHours = (now - startTime) / (1000 * 60 * 60);
         const totalSessionHours = (endTime - startTime) / (1000 * 60 * 60);
         const remainingHours = (endTime - now) / (1000 * 60 * 60);
-        
+
         const baseRate = getMiningRateFromLevel(user.miningLevel || 1);
         const effectiveRate = getEffectiveMiningRate(user); // Use the actual function to get effective rate
         const mined = Math.min(effectiveRate * totalSessionHours, effectiveRate * elapsedHours);
@@ -1827,7 +1954,7 @@ const registerUserHandlers = (socket) => {
   // Handle socket disconnect
   socket.on('disconnect', () => {
     console.log(`🔌 Socket disconnected: ${socket.id}`);
-    
+
     // Find and remove user from online users
     for (const [telegramId, socketId] of onlineUsers.entries()) {
       if (socketId === socket.id) {
