@@ -6,6 +6,7 @@ function Admin() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [winner, setWinner] = useState(null);
   const appSocket = useContext(SocketContext);
 
   const loadMiningStats = useCallback(() => {
@@ -20,9 +21,11 @@ function Admin() {
 
     appSocket.emit('admin:getMiningStats', {}, (response) => {
       setLoading(false);
-      
+
       if (response?.success) {
         setStats(response);
+        // Sync winner with backend persisted state
+        setWinner(response.raffleWinner);
       } else {
         setError(response?.error || 'Failed to load mining stats');
       }
@@ -31,22 +34,22 @@ function Admin() {
 
   useEffect(() => {
     loadMiningStats();
-    
+
     // Auto-refresh every 10 seconds
     const refreshInterval = setInterval(loadMiningStats, 10000);
-    
+
     return () => clearInterval(refreshInterval);
   }, [loadMiningStats]);
 
   const formatNumber = (num) => {
-    return num.toLocaleString(undefined, { 
-      maximumFractionDigits: 5, 
-      minimumFractionDigits: 2 
+    return num.toLocaleString(undefined, {
+      maximumFractionDigits: 5,
+      minimumFractionDigits: 2
     });
   };
 
   return (
-    <motion.div 
+    <motion.div
       className="relative min-h-screen text-white font-sans overflow-x-hidden pb-24"
       variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { duration: 0.4 } } }}
       initial="hidden"
@@ -55,7 +58,7 @@ function Admin() {
       <div className="grok-bg" />
       <div className="relative z-10 max-w-xl mx-auto px-4 pt-4">
         {/* Header */}
-        <motion.div 
+        <motion.div
           className="flex items-center justify-between mb-6 mt-2"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -115,15 +118,62 @@ function Admin() {
               </div>
             </motion.div>
 
+            {/* 7Day Streak Achievers List */}
+            <motion.div
+              className="mb-8"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.25 }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold text-white">
+                  7 Day Streak Achievers
+                </h2>
+                {stats.streakAchievers && stats.streakAchievers.length > 0 && (
+                  <button
+                    onClick={() => {
+                      appSocket.emit('admin:pickRaffleWinner', {}, (res) => {
+                        if (res.success) setWinner(res.winnerName);
+                      });
+                    }}
+                    className="text-[10px] text-white border border-white px-3 py-1 rounded-full font-bold"
+                  >
+                    Pick Random Winner
+                  </button>
+                )}
+              </div>
+
+              {winner && (
+                <div className="mb-4 p-3 bg-yellow-500/20 rounded-lg text-center">
+                  <div className="text-[10px] uppercase text-white font-bold mb-1"> Winner</div>
+                  <div className="text-xl font-bold text-white">{winner}</div>
+                </div>
+              )}
+
+              {!stats.streakAchievers || stats.streakAchievers.length === 0 ? (
+                <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/30 text-center text-gray-500 text-sm">
+                  No users have reached a 7-day streak yet
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2">
+                  {stats.streakAchievers.map((achiever) => (
+                    <div key={achiever.telegramId} className="bg-gray-800/80 rounded-lg p-3 border border-yellow-500/20 flex justify-between items-center">
+                      <span className="text-white font-medium">{achiever.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+
             {/* Players List */}
             <motion.div
               className="mb-6"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.2 }}
+              transition={{ duration: 0.4, delay: 0.3 }}
             >
-              <h2 className="text-lg font-bold text-white mb-3">Players</h2>
-              
+              <h2 className="text-lg font-bold text-white mb-3">Active Miners</h2>
+
               {stats.players.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   No active mining sessions
@@ -147,7 +197,7 @@ function Admin() {
                         <div className="text-right">
                         </div>
                       </div>
-                    
+
                     </motion.div>
                   ))}
                 </div>
