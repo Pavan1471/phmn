@@ -9,22 +9,11 @@ const DailyStreakPopup = ({
     onClaim,
     isLoading
 }) => {
-    if (!isOpen) return null;
-
-    const rewards = [0.1, 0.3, 0.6, 0.9, 1.3, 1.6, 2.0];
-    const { streak, canClaim } = streakData || { streak: 0, canClaim: false };
-
-    const getStatus = (index) => {
-        if (index < streak) return 'claimed';
-        if (index === streak) return canClaim ? 'claimable' : 'current';
-        return 'locked';
-    };
-
-    // Countdown logic
+    // Hooks must be called unconditionally at the top level
     const [timeLeft, setTimeLeft] = useState('');
 
     useEffect(() => {
-        if (!streakData || canClaim) return;
+        if (!isOpen || !streakData || (streakData && streakData.canClaim)) return;
 
         const updateCountdown = () => {
             const now = new Date();
@@ -47,7 +36,18 @@ const DailyStreakPopup = ({
         updateCountdown();
         const timer = setInterval(updateCountdown, 1000);
         return () => clearInterval(timer);
-    }, [streakData, canClaim]);
+    }, [isOpen, streakData]);
+
+    if (!isOpen) return null;
+
+    const rewards = [0.1, 0.3, 0.6, 0.9, 1.3, 1.6, 2.0];
+    const { streak, canClaim } = streakData || { streak: 0, canClaim: false };
+
+    const getStatus = (index) => {
+        if (index < streak) return 'claimed';
+        if (index === streak) return canClaim ? 'claimable' : 'current';
+        return 'locked';
+    };
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
