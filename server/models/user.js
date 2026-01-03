@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema({
   last_name: String,
   profile_picture: String, // Telegram profile picture URL
   score: { type: Number, default: 0 },
-  
+
   // Referral system fields
   referralCode: { type: String, unique: true, sparse: true }, // Unique referral code for this user
   referredBy: { type: Number, ref: 'User' }, // Who referred this user
@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema({
     milestone: { type: Number }, // Milestone number (for milestone rewards)
     timestamp: { type: Date, default: Date.now } // When the reward was earned
   }],
-  
+
 
   // Game-based mining fields
   total_mined_pieces: { type: Number, default: 0 },
@@ -43,10 +43,10 @@ const userSchema = new mongoose.Schema({
       purchasedAt: { type: Date, default: Date.now }
     }
   ],
-  
+
   // PHMN 
   PHMN: { type: Number, default: 0 },
-  
+
   // 12-hour mining session (Play.js) - users can start anytime
   miningSessionStartTime: { type: Date, default: null }, // When the current 12-hour session started
   miningSessionEndTime: { type: Date, default: null }, // When the current 12-hour session ends (startTime + 12 hours)
@@ -54,11 +54,11 @@ const userSchema = new mongoose.Schema({
   miningLevel: { type: Number, default: 1 }, // Mining level (1, 5, 10, 15, 20, 25, 30, 50)
   miningRate: { type: Number, default: 0.00463 }, // per hour (calculated from mining level)
   timezone: { type: String, default: null }, // User's timezone (optional, not required for mining)
-  
+
   // Adsgram integration - track ads watched per session
   adsWatchedForCycle: { type: Number, default: 0 }, // Number of ads watched for current session (0-1, resets when mining starts)
   lastCycleWithAds: { type: Number, default: null }, // Deprecated - kept for backward compatibility
-  
+
   // Mining Boost System (Turbo 2x, Super 4x, Ultimate 6x)
   activeBoost: {
     mode: { type: String, enum: ['turbo', 'super', 'ultimate'], default: null }, // Boost type
@@ -84,7 +84,7 @@ const userSchema = new mongoose.Schema({
 
   // TON wallet integration
   walletAddress: { type: String, default: null }, // User's TON wallet address
-  
+
   // Friends functionality
   friends: [{ type: Number, ref: 'User' }], // Array of telegram IDs
   friend_requests: [{ type: Number, ref: 'User' }], // Pending friend requests
@@ -98,6 +98,7 @@ const userSchema = new mongoose.Schema({
   gamesPlayed: { type: Number, default: 0 }, // Total games played
   miningStreak: { type: Number, default: 0 }, // Consecutive days of mining
   lastMiningDate: { type: Date, default: null }, // Last date user mined (for streak tracking)
+  dailyStreak: { type: Number, default: 0 }, // Consecutive daily login streak
   channelJoinedRewardClaimed: { type: Boolean, default: false }, // Whether channel join reward was claimed
   xFollowRewardClaimed: { type: Boolean, default: false }, // Whether X follow reward was claimed
   youtubeSubscribeRewardClaimed: { type: Boolean, default: false }, // Whether YouTube subscribe reward was claimed
@@ -107,15 +108,15 @@ const userSchema = new mongoose.Schema({
 });
 
 // Update the updated_at field before saving
-userSchema.pre('save', function(next) {
+userSchema.pre('save', function (next) {
   this.updated_at = Date.now();
 
-  
+
   next();
 });
 
 // Generate unique referral code and public ID before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (!this.referralCode) {
     this.referralCode = await this.generateReferralCode();
   }
@@ -126,7 +127,7 @@ userSchema.pre('save', async function(next) {
 });
 
 // Method to generate unique referral code
-userSchema.methods.generateReferralCode = async function() {
+userSchema.methods.generateReferralCode = async function () {
   const generateCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
@@ -158,9 +159,9 @@ userSchema.methods.generateReferralCode = async function() {
 };
 
 // Method to generate unique public ID
-userSchema.methods.generatePublicId = async function() {
+userSchema.methods.generatePublicId = async function () {
   const crypto = require('crypto');
-  
+
   const generateId = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     const randomBytes = crypto.randomBytes(6);
