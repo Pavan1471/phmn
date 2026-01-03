@@ -1,4 +1,5 @@
 const User = require('../models/user');
+const Settings = require('../models/settings');
 const socketManager = require('../socket/socketManager');
 
 // Mining levels configuration (matches client-side)
@@ -910,6 +911,11 @@ const registerUserHandlers = (socket) => {
       // Next time check: if streak >= 7 -> streak = 0. Correct.
 
       await user.save();
+
+      // If user just reached day 7, clear the old raffle winner to start a new round
+      if (user.dailyStreak === 7) {
+        await Settings.deleteOne({ key: 'raffleWinner' });
+      }
 
       console.log(`✅ User ${telegramId} claimed daily streak day ${streak + 1} (${rewardAmount} PHMN)`);
 
@@ -1937,16 +1943,64 @@ const registerUserHandlers = (socket) => {
 
       const totalPHMNBalance = totalPHMNResult.length > 0 ? totalPHMNResult[0].totalPHMN : 0;
 
+      // Find users who completed 7 days streak
+      const streakAchievers = await User.find({
+        dailyStreak: { $gte: 7 }
+      }).select('telegramId first_name last_name username').lean();
+
+      const processedStreakAchievers = streakAchievers.map(user => ({
+        telegramId: user.telegramId,
+        name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || `User ${user.telegramId}`
+      }));
+
+      // Fetch winner from settings
+      const winnerSetting = await Settings.findOne({ key: 'raffleWinner' });
+      const raffleWinner = winnerSetting ? winnerSetting.value : null;
+
       callback && callback({
         success: true,
         totalPlayers,
         totalMined,
         totalPHMNBalance,
         players,
+        streakAchievers: processedStreakAchievers,
+        raffleWinner: raffleWinner,
         lastUpdated: now.toISOString()
       });
     } catch (error) {
       console.error('Error getting admin mining stats:', error);
+      callback && callback({ success: false, error: error.message });
+    }
+  });
+
+  // Admin: Pick Raffle Winner
+  socket.on('admin:pickRaffleWinner', async (data, callback) => {
+    try {
+      const achievers = await User.find({
+        dailyStreak: { $gte: 7 }
+      }).select('telegramId first_name last_name username').lean();
+
+      if (achievers.length === 0) {
+        return callback && callback({ success: false, error: 'No achievers found' });
+      }
+
+      const winner = achievers[Math.floor(Math.random() * achievers.length)];
+      const winnerName = `${winner.first_name || ''} ${winner.last_name || ''}`.trim() || winner.username || `User ${winner.telegramId}`;
+
+      // Save winner to settings
+      await Settings.findOneAndUpdate(
+        { key: 'raffleWinner' },
+        { value: winnerName, updatedAt: new Date() },
+        { upsert: true }
+      );
+
+      callback && callback({
+        success: true,
+        winnerName,
+        winnerId: winner.telegramId
+      });
+    } catch (error) {
+      console.error('Error picking winner:', error);
       callback && callback({ success: false, error: error.message });
     }
   });
