@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import phmnCoinImg from '../images/PHMN coin.png';
 
 const DailyStreakPopup = ({
     isOpen,
@@ -18,6 +19,35 @@ const DailyStreakPopup = ({
         if (index === streak) return canClaim ? 'claimable' : 'current';
         return 'locked';
     };
+
+    // Countdown logic
+    const [timeLeft, setTimeLeft] = useState('');
+
+    useEffect(() => {
+        if (!streakData || canClaim) return;
+
+        const updateCountdown = () => {
+            const now = new Date();
+            const nextMidnight = new Date(now);
+            nextMidnight.setHours(24, 0, 0, 0); // Next midnight
+
+            const diff = nextMidnight - now;
+            if (diff <= 0) {
+                setTimeLeft('Available now!');
+                return;
+            }
+
+            const h = Math.floor(diff / (1000 * 60 * 60));
+            const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const s = Math.floor((diff % (1000 * 60)) / 1000);
+
+            setTimeLeft(`${h}h ${m}m ${s}s`);
+        };
+
+        updateCountdown();
+        const timer = setInterval(updateCountdown, 1000);
+        return () => clearInterval(timer);
+    }, [streakData, canClaim]);
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -57,8 +87,11 @@ const DailyStreakPopup = ({
                                 <div
                                     key={index}
                                     className={`
-                    relative rounded-lg flex flex-col items-center justify-center transition-all duration-300 border
-                    ${isLarge ? 'col-span-4 h-14 flex-row gap-3' : 'h-16'}
+                    relative rounded-lg flex transition-all duration-300 border
+                    ${isLarge
+                                            ? 'col-span-4 h-20 flex-row items-center justify-between px-6 shadow-[inset_0_0_20px_rgba(168,85,247,0.1)]'
+                                            : 'flex-col items-center justify-center h-16'
+                                        }
                     ${status === 'claimed'
                                             ? 'bg-purple-900/30 border-purple-500/30 text-purple-100'
                                             : status === 'claimable'
@@ -69,18 +102,27 @@ const DailyStreakPopup = ({
                                         }
                   `}
                                 >
-                                    <div className={`text-[9px] uppercase tracking-wide opacity-60 ${isLarge ? 'mb-0' : 'mb-0.5'}`}>
-                                        {isLarge ? 'Day 7 Bonus' : `Day ${dayNum}`}
+                                    <div className="flex flex-col items-start">
+                                        <div className={`text-[9px] uppercase tracking-wide opacity-60 ${isLarge ? 'mb-0.5' : 'mb-0.5'}`}>
+                                            {isLarge ? 'Day 7 Bonus' : `Day ${dayNum}`}
+                                        </div>
+
+                                        {isLarge && (
+                                            <div className="flex flex-col items-start leading-none gap-0.5">
+                                                <span className="text-[8px] text-white/80 uppercase tracking-tighter">Entry into raffle draw</span>
+                                                <span className="text-[10px] text-yellow-500 ">(Raffle Reward 5$)</span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {status === 'claimed' && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg">
-                                            <span className="text-lg">✓</span>
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/75 rounded-lg z-10">
+                                            <span className="text-xl">✓</span>
                                         </div>
                                     )}
 
-                                    <div className={`font-bold leading-none ${isLarge ? 'text-xl' : 'text-sm'}`}>
-                                        {reward} <span className="text-[8px] font-normal opacity-70">PHMN</span>
+                                    <div className={`font-bold leading-none flex items-center gap-1 ${isLarge ? 'text-2xl' : 'text-sm'}`}>
+                                        {reward} <img src={phmnCoinImg} alt="PHMN" className={`${isLarge ? 'w-6 h-6' : 'w-4 h-4'} object-contain`} />
                                     </div>
                                 </div>
                             );
@@ -88,7 +130,7 @@ const DailyStreakPopup = ({
                     </div>
 
                     <p className="text-center text-[10px] text-red-400/70 mb-3 h-3">
-                        {!canClaim && streak > 0 ? "Next reward available tomorrow" : ""}
+                        {!canClaim && streak > 0 ? `Next reward in: ${timeLeft}` : ""}
                     </p>
 
                     <button
