@@ -6,6 +6,7 @@ import twitterIcon from '../images/task-icon/twitter.png';
 import youtubeIcon from '../images/task-icon/youtube.png';
 import telegramIcon from '../images/task-icon/telegram.png';
 import discordIcon from '../images/task-icon/discord.png';
+import tinlakeIcon from '../images/task-icon/tinlake.png';
 import phmnCoinImg from '../images/PHMN coin.png';
 import adsgramService from '../services/adsgram';
 import { ADSGRAM_BLOCK_ID, ADSGRAM_DEBUG, fetchBlockIdFromSocket } from '../config/adsgram';
@@ -30,7 +31,8 @@ const Tasks = ({ telegramUser, botUsername }) => {
   const [buttonStates, setButtonStates] = useState({
     join_channel: 'join', // 'join' or 'claim'
     follow_x: 'follow',     // 'follow' or 'claim'
-    join_discord: 'join' // 'join' or 'claim'
+    join_discord: 'join', // 'join' or 'claim'
+    join_tinlake: 'join' // 'join' or 'claim'
   });
 
   const tabs = [
@@ -190,6 +192,8 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
           setButtonStates(prev => ({ ...prev, follow_x: 'follow' }));
         } else if (taskId === 'join_discord') {
           setButtonStates(prev => ({ ...prev, join_discord: 'join' }));
+        } else if (taskId === 'join_tinlake') {
+          setButtonStates(prev => ({ ...prev, join_tinlake: 'join' }));
         }
       } else {
         if (res?.requiresVerification) {
@@ -410,6 +414,39 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
     setButtonStates(prev => ({ ...prev, join_discord: 'join' }));
   };
 
+  const handleTinlakeJoin = (task) => {
+    if (task.tinlakeLink) {
+      // Open the Tinlake link in a new tab (or Telegram WebApp)
+      if (window.Telegram?.WebApp) {
+        try {
+          window.Telegram.WebApp.openTelegramLink(task.tinlakeLink);
+          showNotification('Opening Tinlake... Join and return here to click "Claim"!', 'success');
+          // Change button state to 'claim'
+          setButtonStates(prev => ({ ...prev, join_tinlake: 'claim' }));
+        } catch (error) {
+           window.open(task.tinlakeLink, '_blank');
+           showNotification('Opening Tinlake... Join and return here to click "Claim"!', 'success');
+           setButtonStates(prev => ({ ...prev, join_tinlake: 'claim' }));
+        }
+      } else {
+        window.open(task.tinlakeLink, '_blank');
+        showNotification('Opening Tinlake... Join and return here to click "Claim"!', 'success');
+        setButtonStates(prev => ({ ...prev, join_tinlake: 'claim' }));
+      }
+    }
+  };
+
+  const handleTinlakeVerification = (task) => {
+    if (!socket || !telegramUser) return;
+    
+    // Direct claim without confirmation (or maybe with confirmation since we can't verify)
+    // Using simple confirmation like other social tasks
+    showNotification('Claiming Tinlake join reward...', 'success');
+    claimTaskReward(task.id, { confirmed: true });
+    // Reset button state after successful claim
+    setButtonStates(prev => ({ ...prev, join_tinlake: 'join' }));
+  };
+
   const generateReferralLink = () => {
     return `https://t.me/${botUsernameState}?start=${referralCode}`;
   };
@@ -552,6 +589,7 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
       'join_channel': telegramIcon,
       'subscribe_youtube': youtubeIcon,
       'join_discord': discordIcon,
+      'join_tinlake': tinlakeIcon,
     };
     return iconMap[taskId] || null;
   };
@@ -574,8 +612,8 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
     if (task.id === 'extend_mining_time') {
       return '+2 Hours';
     }
-    // For social tasks (join_channel, follow_x, join_discord), show PHMN reward
-    if (task.id === 'join_channel' || task.id === 'follow_x' || task.id === 'join_discord') {
+    // For social tasks (join_channel, follow_x, join_discord, join_tinlake), show PHMN reward
+    if (task.id === 'join_channel' || task.id === 'follow_x' || task.id === 'join_discord' || task.id === 'join_tinlake') {
       return '+0.3 PHMN';
     }
     // For other tasks, show energy reward
@@ -613,6 +651,7 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
           const isJoinTask = task.id === 'join_channel';
           const isFollowXTask = task.id === 'follow_x';
           const isDiscordTask = task.id === 'join_discord';
+          const isTinlakeTask = task.id === 'join_tinlake';
 
           return (
             <motion.div 
@@ -625,7 +664,7 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
               initial={{ opacity: 0, y: 10 }} 
               animate={{ opacity: 1, y: 0 }}
             >
-              <div className={`flex items-center justify-between ${!taskIsClaimable && !isJoinTask && !isFollowXTask && !isDiscordTask ? 'opacity-60' : ''}`}>
+              <div className={`flex items-center justify-between ${!taskIsClaimable && !isJoinTask && !isFollowXTask && !isDiscordTask && !isTinlakeTask ? 'opacity-60' : ''}`}>
                 <div className="flex items-center gap-4 flex-1">
                   <div className="flex-shrink-0 w-12 h-12 flex items-center justify-center">
                     {getTaskIcon(task.id) ? (
@@ -749,6 +788,40 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
                     ) : (
                       <motion.button 
                         onClick={() => handleDiscordJoinVerification(task)}
+                        className="text-white text-sm px-4 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 flex items-center justify-center gap-2 shadow-lg font-medium cursor-pointer hover:from-purple-700 hover:to-purple-800 min-w-[100px]"
+                        whileHover={{ scale: 1.05, y: -2 }}
+                        whileTap={{ scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        <img
+                          src={phmnCoinImg}
+                          alt="PHMN Coin"
+                          className="w-6 h-6 select-none"
+                          draggable="false"
+                        />
+                        <span>0.3</span>
+                      </motion.button>
+                    )
+                  ) : isTinlakeTask ? (
+                    buttonStates.join_tinlake === 'join' ? (
+                      <motion.button 
+                        onClick={() => handleTinlakeJoin(task)}
+                        className="text-white text-sm px-4 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 flex items-center justify-center gap-2 shadow-lg font-medium cursor-pointer hover:from-purple-700 hover:to-purple-800 min-w-[100px]"
+                        whileHover={{ scale: 1.05, y: -2 }}
+                        whileTap={{ scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        <img
+                          src={phmnCoinImg}
+                          alt="PHMN Coin"
+                          className="w-6 h-6 select-none"
+                          draggable="false"
+                        />
+                        <span>0.3</span>
+                      </motion.button>
+                    ) : (
+                      <motion.button 
+                        onClick={() => handleTinlakeVerification(task)}
                         className="text-white text-sm px-4 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 flex items-center justify-center gap-2 shadow-lg font-medium cursor-pointer hover:from-purple-700 hover:to-purple-800 min-w-[100px]"
                         whileHover={{ scale: 1.05, y: -2 }}
                         whileTap={{ scale: 0.95 }}
