@@ -578,6 +578,20 @@ class TasksHandler {
       };
       tasks.push(discordTask);
 
+      // Join Tinlake task
+      const tinlakeTask = {
+        id: 'join_tinlake',
+        type: 'social',
+        title: 'Join Tinlake - the first crypto EdTech TMA',
+        description: 'Join Tinlake mini-app for rewards',
+        reward: 0.3,
+        completed: user.tinlakeJoinedRewardClaimed || false,
+        progress: user.tinlakeJoinedRewardClaimed ? 1 : 0,
+        target: 1,
+        tinlakeLink: 'https://t.me/tinlake_bot/start?startapp=50161F7D6'
+      };
+      tasks.push(tinlakeTask);
+
 
       callback({
         success: true,
@@ -766,6 +780,29 @@ class TasksHandler {
           user.discordJoinedRewardClaimed = true;
           user.PHMN = (user.PHMN || 0) + rewardAmount;
           message = 'Discord join reward claimed! +0.3 PHMN';
+          break;
+
+        case 'join_tinlake':
+          if (user.tinlakeJoinedRewardClaimed) {
+            return callback({ success: false, error: 'Tinlake join reward already claimed' });
+          }
+          
+          // For Tinlake join, we'll use manual verification
+          const tinlakeConfirmed = data.confirmed || false;
+          
+          if (!tinlakeConfirmed) {
+            return callback({ 
+              success: false, 
+              error: 'Please join Tinlake first, then confirm to claim your reward.',
+              requiresConfirmation: true
+            });
+          }
+          
+          // Tinlake join reward: 0.3 PHMN
+          rewardAmount = 0.3;
+          user.tinlakeJoinedRewardClaimed = true;
+          user.PHMN = (user.PHMN || 0) + rewardAmount;
+          message = 'Tinlake join reward claimed! +0.3 PHMN';
           break;
 
         default:
