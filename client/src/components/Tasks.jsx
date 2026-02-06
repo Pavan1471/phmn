@@ -893,8 +893,8 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
                       whileHover={{ scale: 1.02 }}
                       transition={{ duration: 0.15 }}
                     >
-                      <span>✗</span>
-                      <span>Locked</span>
+                      <span>✓</span>
+                      <span>Claimed</span>
                     </motion.div>
                   )}
                 </div>
