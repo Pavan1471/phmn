@@ -103,6 +103,7 @@ const userSchema = new mongoose.Schema({
   xFollowRewardClaimed: { type: Boolean, default: false }, // Whether X follow reward was claimed
   youtubeSubscribeRewardClaimed: { type: Boolean, default: false }, // Whether YouTube subscribe reward was claimed
   discordJoinedRewardClaimed: { type: Boolean, default: false }, // Whether Discord join reward was claimed
+  tinlakeJoinedRewardClaimed: { type: Boolean, default: false }, // Whether Tinlake join reward was claimed
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 });
