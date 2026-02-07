@@ -1271,6 +1271,8 @@ const registerUserHandlers = (socket) => {
       user.miningSessionStartTime = startTime;
       user.miningSessionEndTime = endTime;
       user.miningSessionPendingRewards = 0; // Reset pending rewards
+      // Reset reminder flag
+      user.miningSessionReminderSent = false;
       // Reset ads watched when starting new session (user needs to watch ad for next session)
       user.adsWatchedForCycle = 0;
       user.lastCycleWithAds = null;
