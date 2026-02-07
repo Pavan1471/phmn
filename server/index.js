@@ -17,7 +17,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const app = express();
 
 app.use(require('cors')({
-  origin: [process.env.GAME_URL ],
+  origin: [process.env.GAME_URL],
   credentials: true
 }));
 app.use(express.json()); // Add JSON body parsing
@@ -34,8 +34,8 @@ app.get('/api/health', (req, res) => {
 // Get Adsgram Block ID
 app.get('/api/adsgram/blockId', (req, res) => {
   const blockId = process.env.ADSGRAM_BLOCK_ID || null;
-  res.json({ 
-    success: !!blockId, 
+  res.json({
+    success: !!blockId,
     blockId: blockId,
     message: blockId ? 'Block ID available' : 'Block ID not configured'
   });
@@ -68,7 +68,7 @@ app.get('/api/users/search', async (req, res) => {
     if (!searchTerm) {
       return res.status(400).json({ success: false, error: 'Search term is required' });
     }
-    
+
     const users = await searchUsers(searchTerm, excludeTelegramId);
     res.json({ success: true, users });
   } catch (error) {
@@ -119,9 +119,9 @@ app.get('/api/leaderboard', async (req, res) => {
 
 // Test endpoint for debugging
 app.get('/api/test', (req, res) => {
-  res.json({ 
-    success: true, 
-    message: 'Server is running!', 
+  res.json({
+    success: true,
+    message: 'Server is running!',
     timestamp: new Date().toISOString(),
     endpoints: ['/api/health', '/api/leaderboard', '/api/test']
   });
@@ -147,14 +147,14 @@ server.listen(PORT, () => {
 
 // Connect to MongoDB
 (async () => {
-    try {
-        await connectToDatabase();
-        console.log('✅ Database connection established');
-    } catch (error) {
-        console.error('❌ Failed to connect to database:', error);
-        // Don't exit the process, continue without database
-        console.log('⚠️ Server will continue running without database connection');
-    }
+  try {
+    await connectToDatabase();
+    console.log('✅ Database connection established');
+  } catch (error) {
+    console.error('❌ Failed to connect to database:', error);
+    // Don't exit the process, continue without database
+    console.log('⚠️ Server will continue running without database connection');
+  }
 })();
 
 // Initialize Telegram Bot
@@ -180,7 +180,7 @@ if (!botToken || botToken === 'your_bot_token_here' || botToken === '') {
 } else {
   try {
     const bot = new TelegramBot(botToken, { polling: true });
-    
+
     console.log('🤖 Telegram Bot starting...');
     console.log(`📱 Bot username: @${botUsername}`);
     console.log(`🎮 Game URL: ${gameUrl || 'not configured'}`);
@@ -224,14 +224,14 @@ if (!botToken || botToken === 'your_bot_token_here' || botToken === '') {
         if (referralCode) {
           // Referral link - redirect to Mini App with referral code
           console.log(`🎯 Referral link accessed with code: ${referralCode}`);
-          
+
           // Store the referral code for this user (valid for 1 hour)
           referralCodeStore.set(chatId.toString(), {
             code: referralCode,
             timestamp: Date.now(),
             expiresAt: Date.now() + (60 * 60 * 1000) // 1 hour
           });
-          
+
           const welcomeText = `🎮 Welcome to  PHMN CHAD BOT!\n\n🎲 You were invited by a friend!\n\n🎁 Click the "Open Game" button below to start playing and earn rewards!\n\n💡 Tip: Use the button below for the best experience!`;
           const keyboard = {
             inline_keyboard: [[
@@ -262,7 +262,7 @@ if (!botToken || botToken === 'your_bot_token_here' || botToken === '') {
       bot.onText(/\/help/, async (msg) => {
         const chatId = msg.chat.id;
         const helpText = `🎮 Game Mini App\n\n📱 This is a Mini App that runs directly in Telegram!\n\n🎯 To play:\n• Open the Mini App from the menu\n• Or use /start to get the link\n\n🎁 Referral System:\n• Share your referral link with friends\n• Earn rewards when they join and play\n\n🎲 Features:\n• Play with friends\n• Bot games\n• Mining system\n• Referral rewards`;
-        
+
         await bot.sendMessage(chatId, helpText);
       });
 
@@ -280,17 +280,17 @@ if (!botToken || botToken === 'your_bot_token_here' || botToken === '') {
         // Check if this is a referral link
         if (referralCode) {
           console.log(`🎯 Referral link accessed with code: ${referralCode}`);
-          
+
           // Store the referral code for this user (valid for 1 hour)
           referralCodeStore.set(chatId.toString(), {
             code: referralCode,
             timestamp: Date.now(),
             expiresAt: Date.now() + (60 * 60 * 1000) // 1 hour
           });
-          
+
           // Welcome message for referral
           const welcomeText = `🎮 Welcome to PHMN CHAD BOT!\n\n🎲 You were invited by a friend!\n\n🎁 Click the "Play" button below to start playing and earn rewards!\n\n💡 Tip: Use the button below for the best experience!`;
-          
+
           const keyboard = {
             inline_keyboard: [[
               buildLaunchButton('🎮 Play', referralCode)
@@ -327,6 +327,61 @@ if (!botToken || botToken === 'your_bot_token_here' || botToken === '') {
       }
     }, 30 * 60 * 1000); // 30 minutes
 
+    // Mining Session Reminder (runs every 5 minutes)
+    setInterval(async () => {
+      try {
+        const now = new Date();
+        const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+        // Find users with completed mining session (endTime < now) who haven't been reminded
+        // Only check sessions ended within last 24 hours to avoid spamming inactive users
+        const usersToRemind = await User.find({
+          miningSessionEndTime: { $lt: now, $gt: twentyFourHoursAgo }, // Completed recently
+          $or: [
+             { miningSessionReminderSent: false },
+             { miningSessionReminderSent: { $exists: false } }
+          ]
+        }).limit(50); // Process in batches
+
+        if (usersToRemind.length > 0) {
+          console.log(`⏰ Found ${usersToRemind.length} users to remind about mining completion`);
+        }
+
+        for (const user of usersToRemind) {
+          try {
+            // Check if mini app is enabled to add button
+            const keyboard = miniAppEnabled ? {
+              inline_keyboard: [[
+                buildLaunchButton('🎮 Start Mining') // No referral code needed for self-start
+              ]]
+            } : undefined;
+
+            await bot.sendMessage(user.telegramId, 
+              "⛏️ *Mining Completed!* ⛏️\n\nYour mining session has finished and your rewards are ready to claim! 💰\n\nStart a new session now to keep earning PHMN! 🚀", 
+              {
+                parse_mode: 'Markdown',
+                reply_markup: keyboard
+              }
+            );  
+            
+            user.miningSessionReminderSent = true;
+            await user.save();
+            console.log(`✅ Sent mining reminder to user ${user.telegramId}`);
+          } catch (e) {
+            console.error(`❌ Failed to send reminder to user ${user.telegramId}:`, e.message);
+            // If bot is blocked or user not found, mark as sent to avoid infinite retries
+            if (e.response && (e.response.statusCode === 403 || e.response.statusCode === 400)) {
+               console.log(`⚠️ Marking reminder as sent for blocked/invalid user ${user.telegramId}`);
+               user.miningSessionReminderSent = true;
+               await user.save();
+            }
+          }
+        }
+      } catch (err) {
+        console.error('❌ Error in mining reminder cron:', err);
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
+
     // Handle errors (suppressed for development)
     bot.on('error', (error) => {
       // console.error('❌ Bot error:', error);
@@ -340,7 +395,7 @@ if (!botToken || botToken === 'your_bot_token_here' || botToken === '') {
     if (miniAppEnabled) {
       console.log('📱 Mini App mode enabled - users can access directly via Mini App');
     }
-    
+
   } catch (error) {
     console.error('❌ Failed to initialize Telegram Bot:', error);
   }
