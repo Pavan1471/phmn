@@ -59,6 +59,9 @@ const userSchema = new mongoose.Schema({
   adsWatchedForCycle: { type: Number, default: 0 }, // Number of ads watched for current session (0-1, resets when mining starts)
   lastCycleWithAds: { type: Number, default: null }, // Deprecated - kept for backward compatibility
 
+  // Reminder system
+  miningSessionReminderSent: { type: Boolean, default: false }, // Whether reminder was sent for current session
+
   // Mining Boost System (Turbo 2x, Super 4x, Ultimate 6x)
   activeBoost: {
     mode: { type: String, enum: ['turbo', 'super', 'ultimate'], default: null }, // Boost type
