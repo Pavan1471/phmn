@@ -6,7 +6,7 @@ const socketManager = require('./socket/socketManager');
 const mongoose = require('./config/database'); // exports connected mongoose instance
 const { connectToDatabase } = require('./config/database'); // Get the connect function
 const User = require('./models/user');
-const { saveUserData, getUserProfile, searchUsers } = require('./handlers/userHandler');
+const { saveUserData, getUserProfile, searchUsers, getMiningStats } = require('./handlers/userHandler');
 
 // Import socket configuration
 const configureSocket = require('./config/socket');
@@ -174,266 +174,167 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports.referralCodeStore = referralCodeStore;
 }
 
+// Global variable for the bot instance to be used by reminder task
+let telegramBotInstance = null;
+
+const ensureGameUrlConfigured = async (chatId, bot) => {
+  if (gameUrl) return true;
+  await bot.sendMessage(chatId, '⚠️ The game link is not configured yet. Please try again later.');
+  return false;
+};
+
+const buildLaunchButton = (text, referralCode) => {
+  const targetUrl = referralCode ? `${gameUrl}?start=${referralCode}` : gameUrl;
+  if (miniAppEnabled) {
+    return { text, web_app: { url: targetUrl } };
+  }
+  return { text, url: targetUrl };
+};
+
+// Mining Session Reminder (runs every 5 minutes)
+const runMiningReminder = async () => {
+  try {
+    if (mongoose.connection.readyState !== 1) return;
+    if (!telegramBotInstance) return;
+
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const usersToRemind = await User.find({
+      miningSessionEndTime: { $lt: now, $gt: twentyFourHoursAgo },
+      $or: [
+         { miningSessionReminderSent: false },
+         { miningSessionReminderSent: { $exists: false } }
+      ]
+    }).limit(50);
+
+    if (usersToRemind.length > 0) {
+      console.log(`⏰ Found ${usersToRemind.length} users to remind about mining completion`);
+    }
+
+    for (const user of usersToRemind) {
+      try {
+        const keyboard = {
+          inline_keyboard: [[ buildLaunchButton('🎮 Start Mining') ]]
+        };
+        const chatId = user.telegramId.toString();
+        await telegramBotInstance.sendMessage(chatId, 
+          "⛏️ *Mining Completed!* ⛏️\n\nYour mining session has finished and your rewards are ready to claim! 💰\n\nStart a new session now to keep earning PHMN! 🚀", 
+          { parse_mode: 'Markdown', reply_markup: keyboard }
+        );
+        user.miningSessionReminderSent = true;
+        await user.save();
+        console.log(`✅ Sent mining reminder to user ${user.telegramId}`);
+      } catch (e) {
+        if (e.response && (e.response.statusCode === 403 || e.response.statusCode === 400)) {
+           user.miningSessionReminderSent = true;
+           await user.save();
+        } else {
+           console.error(`❌ Failed to send reminder to user ${user.telegramId}:`, e.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('❌ Error in mining reminder cron:', err);
+  }
+};
+
 if (!botToken || botToken === 'your_bot_token_here' || botToken === '') {
   console.log('⚠️ No valid BOT_TOKEN found - Telegram bot disabled');
-  console.log('📝 Add your bot token to .env file to enable Telegram features');
 } else {
   try {
     const bot = new TelegramBot(botToken, { polling: true });
+    telegramBotInstance = bot;
 
     console.log('🤖 Telegram Bot starting...');
     console.log(`📱 Bot username: @${botUsername}`);
     console.log(`🎮 Game URL: ${gameUrl || 'not configured'}`);
     console.log(`📱 Mini App mode: ${miniAppEnabled ? 'Enabled' : 'Disabled'}`);
 
-    const ensureGameUrlConfigured = async (chatId) => {
-      if (gameUrl) {
-        return true;
-      }
-
-      await bot.sendMessage(chatId, '⚠️ The game link is not configured yet. Please try again later.');
-      return false;
-    };
-
-    const buildLaunchButton = (text, referralCode) => {
-      const targetUrl = referralCode ? `${gameUrl}?start=${referralCode}` : gameUrl;
-      if (miniAppEnabled) {
-        return {
-          text,
-          web_app: { url: targetUrl }
-        };
-      }
-
-      return {
-        text,
-        url: targetUrl
-      };
-    };
-
-    // Help command - common for all modes
-    const helpText = `🎮 PHMN CHAD Game\n\n📱 Play and earn PHMN rewards!\n\n🎯 How to play:\n• Open the game via the button below\n• Start mining to earn PHMN every 12 hours\n• Complete tasks for extra rewards\n\n🎁 Referral System:\n• Share your link with friends\n• Earn PHMN for every active referral\n\n🎲 Features:\n• 12h Mining Cycle\n• Team Battles\n• Passive Income`;
+    const welcomeHelpText = `🎮 PHMN CHAD Game\n\n📱 Play and earn PHMN rewards!\n\n🎯 How to play:\n• Open the game via the button below\n• Start mining to earn PHMN every 12 hours\n• Complete tasks for extra rewards\n\n🎁 Referral System:\n• Share your link with friends\n• Earn PHMN for every active referral\n\n🎲 Features:\n• 12h Mining Cycle\n• Team Battles\n• Passive Income`;
 
     bot.onText(/\/help/, async (msg) => {
-      bot.sendMessage(msg.chat.id, helpText, {
-        reply_markup: {
-          inline_keyboard: [[buildLaunchButton('🎮 Open Game')]]
-        }
+      bot.sendMessage(msg.chat.id, welcomeHelpText, {
+        reply_markup: { inline_keyboard: [[buildLaunchButton('🎮 Open Game')]] }
       });
     });
 
-    // Debug command to test reminder immediately
     bot.onText(/\/testremind/, async (msg) => {
       const chatId = msg.chat.id;
       try {
         const user = await User.findOne({ telegramId: chatId });
-        if (!user) {
-          return bot.sendMessage(chatId, "❌ You are not registered in the game database yet. Open the game first!");
-        }
-
-        // Force completion state for testing
-        user.miningSessionEndTime = new Date(Date.now() - 1000); // 1 second ago
+        if (!user) return bot.sendMessage(chatId, "❌ User not found in database.");
+        user.miningSessionEndTime = new Date(Date.now() - 1000);
         user.miningSessionReminderSent = false;
         await user.save();
-
-        await bot.sendMessage(chatId, "🧪 Test mode activated! Your mining session has been marked as 'Completed' and reminder reset. The reminder cron runs every 5 minutes.");
-        console.log(`🧪 User ${chatId} triggered /testremind`);
+        await bot.sendMessage(chatId, "🧪 Test mode activated! Reminder will arrive within 5 mins.");
       } catch (err) {
-        bot.sendMessage(chatId, "❌ Error triggering test: " + err.message);
+        bot.sendMessage(chatId, "❌ Error: " + err.message);
       }
     });
 
     if (miniAppEnabled) {
-      // Mini App mode - simplified bot for referral links only
       bot.onText(/\/start(.+)?/, async (msg, match) => {
         const chatId = msg.chat.id;
         const startParam = match ? match[1] : null;
         const referralCode = startParam && startParam.trim() ? startParam.trim() : null;
-
-        if (!(await ensureGameUrlConfigured(chatId))) {
-          return;
-        }
+        if (!(await ensureGameUrlConfigured(chatId, bot))) return;
 
         if (referralCode) {
-          // Referral link - redirect to Mini App with referral code
-          console.log(`🎯 Referral link accessed with code: ${referralCode}`);
-
-          // Store the referral code for this user (valid for 1 hour)
           referralCodeStore.set(chatId.toString(), {
             code: referralCode,
             timestamp: Date.now(),
-            expiresAt: Date.now() + (60 * 60 * 1000) // 1 hour
+            expiresAt: Date.now() + (60 * 60 * 1000)
           });
-
-          const welcomeText = `🎮 Welcome to  PHMN CHAD BOT!\n\n🎲 You were invited by a friend!\n\n🎁 Click the "Open Game" button below to start playing and earn rewards!\n\n💡 Tip: Use the button below for the best experience!`;
-          const keyboard = {
-            inline_keyboard: [[
-              buildLaunchButton('🎮 Open Game', referralCode)
-            ]]
-          };
-
-          await bot.sendMessage(chatId, welcomeText, {
-            reply_markup: keyboard
+          bot.sendMessage(chatId, `🎮 Welcome!\n\nYou were invited!\n\nClick below to play:`, {
+            reply_markup: { inline_keyboard: [[buildLaunchButton('🎮 Open Game', referralCode)]] }
           });
         } else {
-          // Direct start - redirect to Mini App
-          const welcomeText = `🎮 Welcome to PHMN CHAD BOT!\n\n🎁 Click below to start playing:`;
-
-          const keyboard = {
-            inline_keyboard: [[
-              buildLaunchButton('🎮 Open Game')
-            ]]
-          };
-
-          await bot.sendMessage(chatId, welcomeText, {
-            reply_markup: keyboard
+          bot.sendMessage(chatId, `🎮 Welcome!\n\nClick below to play:`, {
+            reply_markup: { inline_keyboard: [[buildLaunchButton('🎮 Open Game')]] }
           });
         }
       });
     } else {
-      // Traditional bot mode (current implementation)
       bot.onText(/\/start(.+)?/, async (msg, match) => {
         const chatId = msg.chat.id;
         const startParam = match ? match[1] : null;
         const referralCode = startParam && startParam.trim() ? startParam.trim() : null;
+        if (!(await ensureGameUrlConfigured(chatId, bot))) return;
 
-        if (!(await ensureGameUrlConfigured(chatId))) {
-          return;
-        }
-
-        // Check if this is a referral link
         if (referralCode) {
-          console.log(`🎯 Referral link accessed with code: ${referralCode}`);
-
-          // Store the referral code for this user (valid for 1 hour)
           referralCodeStore.set(chatId.toString(), {
             code: referralCode,
             timestamp: Date.now(),
-            expiresAt: Date.now() + (60 * 60 * 1000) // 1 hour
+            expiresAt: Date.now() + (60 * 60 * 1000)
           });
-
-          // Welcome message for referral
-          const welcomeText = `🎮 Welcome to PHMN CHAD BOT!\n\n🎲 You were invited by a friend!\n\n🎁 Click the "Play" button below to start playing and earn rewards!\n\n💡 Tip: Use the button below for the best experience!`;
-
-          const keyboard = {
-            inline_keyboard: [[
-              buildLaunchButton('🎮 Play', referralCode)
-            ]]
-          };
-
-          await bot.sendMessage(chatId, welcomeText, {
-            reply_markup: keyboard
+          bot.sendMessage(chatId, `🎮 Welcome!\n\nYou were invited!\n\nClick below to play:`, {
+            reply_markup: { inline_keyboard: [[buildLaunchButton('🎮 Play', referralCode)]] }
           });
         } else {
-          // Normal start without referral
-          const welcomeText = `🎮 Welcome to PHMN CHAD BOT!`;
-
-          const keyboard = {
-            inline_keyboard: [[
-              buildLaunchButton('🎮 Play')
-            ]]
-          };
-
-          await bot.sendMessage(chatId, welcomeText, {
-            reply_markup: keyboard
+          bot.sendMessage(chatId, `🎮 Welcome!`, {
+            reply_markup: { inline_keyboard: [[buildLaunchButton('🎮 Play')]] }
           });
         }
       });
     }
 
-    // Clean up expired referral codes every 30 minutes
+    // Interval tasks
     setInterval(() => {
       const now = Date.now();
       for (const [chatId, data] of referralCodeStore.entries()) {
-        if (data.expiresAt < now) {
-          referralCodeStore.delete(chatId);
-        }
+        if (data.expiresAt < now) referralCodeStore.delete(chatId);
       }
     }, 30 * 60 * 1000);
 
-    // Mining Session Reminder (runs every 5 minutes)
-    // Wrap in a function to allow delayed start
-    const runMiningReminder = async () => {
-      try {
-        // Ensure database is connected before running query
-        if (mongoose.connection.readyState !== 1) {
-          // console.log('⏳ Mongoose not ready, skipping reminder check');
-          return;
-        }
-
-        const now = new Date();
-        const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-        // Find users with completed mining session who haven't been reminded
-        const usersToRemind = await User.find({
-          miningSessionEndTime: { $lt: now, $gt: twentyFourHoursAgo },
-          $or: [
-             { miningSessionReminderSent: false },
-             { miningSessionReminderSent: { $exists: false } }
-          ]
-        }).limit(50);
-
-        if (usersToRemind.length > 0) {
-          console.log(`⏰ Found ${usersToRemind.length} users to remind about mining completion`);
-        }
-
-        for (const user of usersToRemind) {
-          try {
-            // Extra safety: Verify bot and gameUrl exist
-            if (!bot || !gameUrl) continue;
-
-            const keyboard = {
-              inline_keyboard: [[
-                buildLaunchButton('🎮 Start Mining')
-              ]]
-            };
-
-            const chatId = user.telegramId.toString();
-            await bot.sendMessage(chatId, 
-              "⛏️ *Mining Completed!* ⛏️\n\nYour mining session has finished and your rewards are ready to claim! 💰\n\nStart a new session now to keep earning PHMN! 🚀", 
-              {
-                parse_mode: 'Markdown',
-                reply_markup: keyboard
-              }
-            );
-            
-            user.miningSessionReminderSent = true;
-            await user.save();
-            console.log(`✅ Sent mining reminder to user ${user.telegramId}`);
-          } catch (e) {
-            console.error(`❌ Failed to send reminder to user ${user.telegramId}:`, e.message);
-            if (e.response && (e.response.statusCode === 403 || e.response.statusCode === 400)) {
-               user.miningSessionReminderSent = true;
-               await user.save();
-            }
-          }
-        }
-      } catch (err) {
-        console.error('❌ Error in mining reminder cron:', err);
-      }
-    };
-
-    // Start the interval (and run once after 30 seconds for stability)
-    setTimeout(runMiningReminder, 30000); 
+    setTimeout(runMiningReminder, 45000); 
     setInterval(runMiningReminder, 5 * 60 * 1000);
 
-    // Handle bot errors
-    bot.on('error', (error) => {
-      if (error.code !== 'ETELEGRAM' || !error.message.includes('EFATAL')) {
-        // console.error('🤖 Bot non-fatal error:', error.message);
-      }
-    });
-
-    bot.on('polling_error', (error) => {
-      // Typically just connection flickering, no need to crash
-    });
+    bot.on('error', (error) => { /* Handle error */ });
+    bot.on('polling_error', (error) => { /* Handle polling error */ });
 
     console.log('✅ Telegram Bot is running!');
-    if (miniAppEnabled) {
-      console.log('📱 Mini App mode enabled');
-    }
-
   } catch (error) {
     console.error('❌ Failed to initialize Telegram Bot:', error);
   }
 }
-
