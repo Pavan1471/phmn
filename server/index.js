@@ -315,6 +315,27 @@ if (!botToken || botToken === 'your_bot_token_here' || botToken === '') {
           });
         }
       });
+
+      // Debug command to test reminder immediately
+      bot.onText(/\/testremind/, async (msg) => {
+        const chatId = msg.chat.id;
+        try {
+          const user = await User.findOne({ telegramId: chatId });
+          if (!user) {
+            return bot.sendMessage(chatId, "❌ You are not registered in the game database yet. Open the game first!");
+          }
+
+          // Force completion state for testing
+          user.miningSessionEndTime = new Date(Date.now() - 1000); // 1 second ago
+          user.miningSessionReminderSent = false;
+          await user.save();
+
+          await bot.sendMessage(chatId, "🧪 Test mode activated! Your mining session has been marked as 'Completed' and reminder reset. The reminder cron runs every 5 minutes.");
+          console.log(`🧪 User ${chatId} triggered /testremind`);
+        } catch (err) {
+          bot.sendMessage(chatId, "❌ Error triggering test: " + err.message);
+        }
+      });
     }
 
     // Clean up expired referral codes every 30 minutes
@@ -333,6 +354,9 @@ if (!botToken || botToken === 'your_bot_token_here' || botToken === '') {
         const now = new Date();
         const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+        // Debug: Log heartbeat
+        // console.log(`[${now.toISOString()}] 🔍 Reminder Cron: Checking for completed sessions...`);
+
         // Find users with completed mining session (endTime < now) who haven't been reminded
         // Only check sessions ended within last 24 hours to avoid spamming inactive users
         const usersToRemind = await User.find({
@@ -349,20 +373,21 @@ if (!botToken || botToken === 'your_bot_token_here' || botToken === '') {
 
         for (const user of usersToRemind) {
           try {
-            // Check if mini app is enabled to add button
-            const keyboard = miniAppEnabled ? {
+            // Always include a keyboard with a launch button
+            const keyboard = {
               inline_keyboard: [[
                 buildLaunchButton('🎮 Start Mining') // No referral code needed for self-start
               ]]
-            } : undefined;
+            };
 
-            await bot.sendMessage(user.telegramId, 
+            const chatId = user.telegramId.toString();
+            await bot.sendMessage(chatId, 
               "⛏️ *Mining Completed!* ⛏️\n\nYour mining session has finished and your rewards are ready to claim! 💰\n\nStart a new session now to keep earning PHMN! 🚀", 
               {
                 parse_mode: 'Markdown',
                 reply_markup: keyboard
               }
-            );  
+            );
             
             user.miningSessionReminderSent = true;
             await user.save();
@@ -370,6 +395,7 @@ if (!botToken || botToken === 'your_bot_token_here' || botToken === '') {
           } catch (e) {
             console.error(`❌ Failed to send reminder to user ${user.telegramId}:`, e.message);
             // If bot is blocked or user not found, mark as sent to avoid infinite retries
+            // 403: Forbidden (user blocked bot), 400: Bad Request (generic error or invalid id)
             if (e.response && (e.response.statusCode === 403 || e.response.statusCode === 400)) {
                console.log(`⚠️ Marking reminder as sent for blocked/invalid user ${user.telegramId}`);
                user.miningSessionReminderSent = true;
