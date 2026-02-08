@@ -2022,10 +2022,52 @@ const registerUserHandlers = (socket) => {
   });
 };
 
+const getMiningStats = async (telegramId) => {
+  try {
+    const user = await User.findOne({ telegramId: parseInt(telegramId) });
+    if (!user) return null;
+
+    const now = new Date();
+    let sessionStatus = 'idle';
+    let remainingTime = 0;
+    let pendingRewards = 0;
+
+    if (user.miningSessionStartTime && user.miningSessionEndTime) {
+      if (now < user.miningSessionEndTime) {
+        sessionStatus = 'active';
+        remainingTime = Math.max(0, Math.floor((user.miningSessionEndTime - now) / 1000));
+        const elapsedHours = (now - user.miningSessionStartTime) / (1000 * 60 * 60);
+        const totalSessionHours = (user.miningSessionEndTime - user.miningSessionStartTime) / (1000 * 60 * 60);
+        const effectiveMiningRate = getEffectiveMiningRate(user);
+        const totalRewards = effectiveMiningRate * totalSessionHours;
+        pendingRewards = Math.min(totalRewards, effectiveMiningRate * elapsedHours);
+      } else {
+        sessionStatus = 'completed';
+        remainingTime = 0;
+        pendingRewards = user.miningSessionPendingRewards || 0;
+      }
+    }
+
+    return {
+      sessionStatus,
+      remainingTime,
+      pendingRewards: Math.floor(pendingRewards),
+      miningRate: getEffectiveMiningRate(user),
+      miningLevel: user.miningLevel || 1,
+      PHMN: user.PHMN || 0,
+      lastActive: user.lastActive
+    };
+  } catch (error) {
+    console.error('Error in getMiningStats:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   saveUserData,
   getUserProfile,
   searchUsers,
+  getMiningStats,
   sendFriendRequest,
   acceptFriendRequest,
   rejectFriendRequest,
