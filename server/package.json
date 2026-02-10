@@ -9,8 +9,8 @@
     "init-admin": "node initAdmin.js"
   },
   "dependencies": {
-    "@ton/core": "^0.62.0",
-    "@ton/ton": "^16.0.0",
+    "@ton/core": "^0.63.0",
+    "@ton/ton": "^16.2.2",
     "connect-mongodb-session": "^5.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
