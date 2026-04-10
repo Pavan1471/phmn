@@ -7,11 +7,26 @@ function Admin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [winner, setWinner] = useState(null);
+  const [password, setPassword] = useState('');
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const appSocket = useContext(SocketContext);
 
+  // Task Manager State
+  const [adminTasks, setAdminTasks] = useState([]);
+  const [newTask, setNewTask] = useState({ title: '', reward: '', link: '', icon: '🎯' });
+  const [taskLoading, setTaskLoading] = useState(false);
+  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+
+  const showNotification = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3000);
+  };
+
   const loadMiningStats = useCallback(() => {
-    if (!appSocket || !appSocket.connected) {
-      setError('Not connected to server');
+    if (!appSocket || !isAuthorized) return;
+    
+    if (!appSocket.connected) {
+      showNotification('Not connected to server', 'error');
       setLoading(false);
       return;
     }
@@ -19,196 +34,288 @@ function Admin() {
     setLoading(true);
     setError(null);
 
-    appSocket.emit('admin:getMiningStats', {}, (response) => {
+    // Add a timeout to prevent getting stuck if socket doesn't respond
+    const timeout = setTimeout(() => {
       setLoading(false);
+      showNotification('Refresh timed out', 'error');
+    }, 5000);
 
+    appSocket.emit('admin:getMiningStats', {}, (response) => {
+      clearTimeout(timeout);
+      setLoading(false);
       if (response?.success) {
         setStats(response);
-        // Sync winner with backend persisted state
         setWinner(response.raffleWinner);
       } else {
-        setError(response?.error || 'Failed to load mining stats');
+        setError(response?.error || 'Failed to load stats');
       }
     });
-  }, [appSocket]);
+
+    // Load Admin Tasks
+    appSocket.emit('admin:getTasks', {}, (response) => {
+      if (response?.success) {
+        setAdminTasks(response.tasks);
+      }
+    });
+  }, [appSocket, isAuthorized]);
 
   useEffect(() => {
-    loadMiningStats();
+    if (isAuthorized) {
+      loadMiningStats();
+      const refreshInterval = setInterval(loadMiningStats, 10000);
+      return () => clearInterval(refreshInterval);
+    }
+  }, [loadMiningStats, isAuthorized]);
 
-    // Auto-refresh every 10 seconds
-    const refreshInterval = setInterval(loadMiningStats, 10000);
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (password === 'hauBrOdvu08vOsagkZ') {
+      setIsAuthorized(true);
+      setError(null);
+    } else {
+      setError('Invalid password');
+    }
+  };
 
-    return () => clearInterval(refreshInterval);
-  }, [loadMiningStats]);
+  const addTask = () => {
+    if (!newTask.title || !newTask.reward || !newTask.link) return;
+    setTaskLoading(true);
+    appSocket.emit('admin:addTask', newTask, (res) => {
+      setTaskLoading(false);
+      if (res.success) {
+        setAdminTasks([res.task, ...adminTasks]);
+        setNewTask({ title: '', reward: '', link: '', icon: '🎯' });
+        showNotification('Task added!');
+      } else {
+        showNotification(res.error, 'error');
+      }
+    });
+  };
+
+  const deleteTask = (taskId) => {
+    if (!window.confirm('Are you sure?')) return;
+    appSocket.emit('admin:deleteTask', { taskId }, (res) => {
+      if (res.success) {
+        setAdminTasks(adminTasks.filter(t => t._id !== taskId));
+        showNotification('Task deleted');
+      } else {
+        showNotification(res.error, 'error');
+      }
+    });
+  };
 
   const formatNumber = (num) => {
-    return num.toLocaleString(undefined, {
+    return (num || 0).toLocaleString(undefined, {
       maximumFractionDigits: 5,
       minimumFractionDigits: 2
     });
   };
 
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen bg-[#0f0a1a] flex items-center justify-center p-4">
+        <motion.div 
+          className="bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <h1 className="text-2xl font-bold text-white mb-6 text-center">Admin Login</h1>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter admin password"
+                className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition"
+              />
+            </div>
+            {error && <div className="text-red-400 text-sm text-center">{error}</div>}
+            <button
+              type="submit"
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-purple-500/20"
+            >
+              Login
+            </button>
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <motion.div
       className="relative min-h-screen text-white font-sans overflow-x-hidden pb-24"
-      variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { duration: 0.4 } } }}
-      initial="hidden"
-      animate="visible"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
     >
       <div className="grok-bg" />
       <div className="relative z-10 max-w-xl mx-auto px-4 pt-4">
         {/* Header */}
-        <motion.div
-          className="flex items-center justify-between mb-6 mt-2"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          <h1 className="text-2xl font-bold text-white">Admin</h1>
-          <button
-            onClick={loadMiningStats}
-            disabled={loading}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-semibold transition disabled:opacity-50"
-          >
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
-        </motion.div>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`h-2 w-2 rounded-full ${appSocket?.connected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+              <span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">
+                {appSocket?.connected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={loadMiningStats}
+              disabled={loading}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-semibold transition disabled:opacity-50"
+            >
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+            <button
+              onClick={() => setIsAuthorized(false)}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-semibold transition"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
 
-        {/* Error Message */}
-        {error && (
-          <motion.div
-            className="mb-4 p-4 bg-red-900/30 border border-red-500/50 rounded-xl"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className="text-red-400 text-sm">{error}</div>
-          </motion.div>
-        )}
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="bg-gray-800/80 rounded-xl p-4 border border-gray-700">
+            <div className="text-xs text-gray-400 uppercase font-bold mb-1">Active Miners</div>
+            <div className="text-2xl font-bold text-white">{stats?.totalPlayers || 0}</div>
+          </div>
+          <div className="bg-gray-800/80 rounded-xl p-4 border border-gray-700">
+            <div className="text-xs text-gray-400 uppercase font-bold mb-1">Total Supply</div>
+            <div className="text-2xl font-bold text-white">{formatNumber(stats?.totalPHMNBalance)}</div>
+          </div>
+        </div>
 
-        {/* Loading State */}
-        {loading && !stats && (
-          <div className="text-center py-12">
-            <div className="text-gray-400">Loading mining stats...</div>
+        {/* Tasks Manager */}
+        <div className="mb-8 p-6 bg-gray-800/40 rounded-2xl border border-gray-700">
+          <h2 className="text-xl font-bold text-white mb-4">Tasks Manager</h2>
+          <div className="space-y-3 mb-6">
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="Title"
+                value={newTask.title}
+                onChange={(e) => setNewTask({...newTask, title: e.target.value})}
+                className="bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm text-white"
+              />
+              <input
+                type="number"
+                placeholder="Reward"
+                value={newTask.reward}
+                onChange={(e) => setNewTask({...newTask, reward: e.target.value})}
+                className="bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm text-white"
+              />
+            </div>
+            <input
+              type="text"
+              placeholder="Link"
+              value={newTask.link}
+              onChange={(e) => setNewTask({...newTask, link: e.target.value})}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm text-white"
+            />
+            <input
+              type="text"
+              placeholder="Icon (URL or Emoji)"
+              value={newTask.icon}
+              onChange={(e) => setNewTask({...newTask, icon: e.target.value})}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm text-white"
+            />
+            <button
+              onClick={addTask}
+              disabled={taskLoading}
+              className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg font-bold transition disabled:opacity-50"
+            >
+              Add Task
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {adminTasks.map((task) => (
+              <div key={task._id} className="bg-gray-800 rounded-xl p-4 flex items-center justify-between border border-gray-700">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 flex items-center justify-center">
+                    {task.icon?.startsWith('http') ? (
+                      <img src={task.icon} alt="" className="w-full h-full object-contain" />
+                    ) : (
+                      <span className="text-xl">{task.icon || '🎯'}</span>
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-bold text-sm">{task.title}</div>
+                    <div className="text-xs text-purple-400">+{task.reward} PHMN</div>
+                  </div>
+                </div>
+                <button onClick={() => deleteTask(task._id)} className="text-red-500 p-2 hover:bg-red-500/10 rounded-lg">🗑️</button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Streak Hall of Fame */}
+        {stats?.streakAchievers?.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">Streak Achievers</h2>
+              <button
+                onClick={() => {
+                  appSocket.emit('admin:pickRaffleWinner', {}, (res) => {
+                    if (res.success) {
+                      setWinner(res.winnerName);
+                      showNotification('Winner Picked!');
+                    }
+                  });
+                }}
+                className="px-3 py-1 bg-yellow-500 text-black rounded-lg text-xs font-bold"
+              >
+                Pick Winner
+              </button>
+            </div>
+
+            {winner && (
+              <div className="mb-4 p-4 bg-yellow-500/20 rounded-xl border border-yellow-500/30 text-center">
+                <div className="text-xs uppercase text-yellow-500 font-bold mb-1">🏆 Winner 🏆</div>
+                <div className="text-xl font-bold text-white">{winner}</div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              {stats.streakAchievers.map((achiever) => (
+                <div key={achiever.telegramId} className="bg-gray-800 p-3 rounded-lg border border-gray-700 text-sm">
+                  {achiever.name}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Stats Summary */}
-        {stats && (
-          <>
-            <motion.div
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-            >
-              {/* Total Players Card */}
-              <div className="bg-gray-800 rounded-xl p-4 border border-gray-700/50">
-                <div className="text-sm text-gray-300 mb-2">Active Miners</div>
-                <div className="text-3xl font-bold text-white">{stats.totalPlayers}</div>
-              </div>
-
-              {/* Total PHMN Balance Card */}
-              <div className="bg-gray-800 rounded-xl p-4 border border-gray-700/50">
-                <div className="text-sm text-gray-300 mb-2">Total Balance of all users</div>
-                <div className="flex items-center gap-2">
-                  <div className="text-3xl font-bold text-white">
-                    {stats.totalPHMNBalance !== undefined ? formatNumber(stats.totalPHMNBalance) : '...'}
-                  </div>
+        {/* Players List */}
+        {stats?.players?.length > 0 && (
+          <div>
+            <h2 className="text-xl font-bold text-white mb-4">Live Miners</h2>
+            <div className="bg-gray-800 rounded-xl p-2 border border-gray-700">
+              {stats.players.map((player) => (
+                <div key={player.telegramId} className="flex justify-between p-3 border-b border-gray-700 last:border-0">
+                  <span className="text-sm">{player.name}</span>
+                  <span className="text-xs text-purple-400 font-bold">{formatNumber(player.mined)} PHMN</span>
                 </div>
-              </div>
-            </motion.div>
-
-            {/* 7Day Streak Achievers List */}
-            <motion.div
-              className="mb-8"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.25 }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-bold text-white">
-                  7 Day Streak Achievers
-                </h2>
-                {stats.streakAchievers && stats.streakAchievers.length > 0 && (
-                  <button
-                    onClick={() => {
-                      appSocket.emit('admin:pickRaffleWinner', {}, (res) => {
-                        if (res.success) setWinner(res.winnerName);
-                      });
-                    }}
-                    className="text-[10px] text-white border border-white px-3 py-1 rounded-full font-bold"
-                  >
-                    Pick Random Winner
-                  </button>
-                )}
-              </div>
-
-              {winner && (
-                <div className="mb-4 p-3 bg-yellow-500/20 rounded-lg text-center">
-                  <div className="text-[10px] uppercase text-white font-bold mb-1"> Winner</div>
-                  <div className="text-xl font-bold text-white">{winner}</div>
-                </div>
-              )}
-
-              {!stats.streakAchievers || stats.streakAchievers.length === 0 ? (
-                <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/30 text-center text-gray-500 text-sm">
-                  No users have reached a 7-day streak yet
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-2">
-                  {stats.streakAchievers.map((achiever) => (
-                    <div key={achiever.telegramId} className="bg-gray-800/80 rounded-lg p-3 border border-yellow-500/20 flex justify-between items-center">
-                      <span className="text-white font-medium">{achiever.name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-
-            {/* Players List */}
-            <motion.div
-              className="mb-6"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.3 }}
-            >
-              <h2 className="text-lg font-bold text-white mb-3">Active Miners</h2>
-
-              {stats.players.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
-                  No active mining sessions
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {stats.players.map((player, index) => (
-                    <motion.div
-                      key={player.telegramId}
-                      className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 rounded-xl p-4 border border-gray-700/50"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="font-semibold text-white mb-1">
-                            {player.name}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                        </div>
-                      </div>
-
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          </>
+              ))}
+            </div>
+          </div>
         )}
       </div>
+
+      {notification.show && (
+        <div className={`fixed bottom-10 right-10 px-6 py-3 rounded-xl shadow-2xl z-50 text-white font-bold ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
+          {notification.message}
+        </div>
+      )}
     </motion.div>
   );
 }
 
 export default Admin;
-
