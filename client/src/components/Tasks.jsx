@@ -664,12 +664,18 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
               initial={{ opacity: 0, y: 10 }} 
               animate={{ opacity: 1, y: 0 }}
             >
-              <div className={`flex items-center justify-between ${!taskIsClaimable && !isJoinTask && !isFollowXTask && !isDiscordTask && !isTinlakeTask ? 'opacity-60' : ''}`}>
+              <div className={`flex items-center justify-between ${!taskIsClaimable && !isJoinTask && !isFollowXTask && !isDiscordTask && !isTinlakeTask && !task.isDynamic ? 'opacity-60' : ''}`}>
                 <div className="flex items-center gap-4 flex-1">
                   <div className="flex-shrink-0 w-12 h-12 flex items-center justify-center">
                     {getTaskIcon(task.id) ? (
                       <img 
                         src={getTaskIcon(task.id)} 
+                        alt={task.title} 
+                        className="w-full h-full object-contain"
+                      />
+                    ) : task.icon?.startsWith('http') ? (
+                      <img 
+                        src={task.icon} 
                         alt={task.title} 
                         className="w-full h-full object-contain"
                       />
@@ -836,6 +842,35 @@ const claimTaskReward = useCallback((taskId, additionalData = {}) => {
                         <span>0.3</span>
                       </motion.button>
                     )
+                  ) : task.isDynamic ? (
+                    <motion.button 
+                      onClick={() => {
+                        if (task.link && !buttonStates[task.id]) {
+                          window.open(task.link, '_blank');
+                          setButtonStates(prev => ({ ...prev, [task.id]: 'claim' }));
+                          showNotification(`Open ${task.title} and return to claim!`);
+                        } else {
+                          claimTaskReward(task.id, { confirmed: true });
+                          setButtonStates(prev => {
+                            const newState = { ...prev };
+                            delete newState[task.id];
+                            return newState;
+                          });
+                        }
+                      }}
+                      className="text-white text-sm px-4 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 flex items-center justify-center gap-2 shadow-lg font-medium cursor-pointer hover:from-purple-700 hover:to-purple-800 min-w-[100px]"
+                      whileHover={{ scale: 1.05, y: -2 }}
+                      whileTap={{ scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      <img
+                        src={phmnCoinImg}
+                        alt="PHMN Coin"
+                        className="w-6 h-6 select-none"
+                        draggable="false"
+                      />
+                      <span>{buttonStates[task.id] === 'claim' ? 'Claim' : task.reward}</span>
+                    </motion.button>
                   ) : taskIsClaimable ? (
                     task.id === 'daily_login' ? (
                       <motion.button 
