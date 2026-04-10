@@ -1,4 +1,6 @@
 const User = require('../models/user');
+const Task = require('../models/task');
+const mongoose = require('mongoose');
 let fetch;
 try {
   // Prefer node-fetch v2 for CommonJS
@@ -35,6 +37,11 @@ class TasksHandler {
     this.socket.on('tasks:getAvailable', this.handleGetAvailableTasks.bind(this));
     this.socket.on('tasks:claimReward', this.handleClaimTaskReward.bind(this));
     this.socket.on('tasks:checkChannelMembership', this.handleCheckChannelMembership.bind(this));
+    
+    // Admin Task Management
+    this.socket.on('admin:addTask', this.handleAddTask.bind(this));
+    this.socket.on('admin:deleteTask', this.handleDeleteTask.bind(this));
+    this.socket.on('admin:getTasks', this.handleGetTasks.bind(this));
     
     // App configuration events
     this.socket.on('app:getBotUsername', this.handleGetBotUsername.bind(this));
@@ -592,6 +599,24 @@ class TasksHandler {
       };
       tasks.push(tinlakeTask);
 
+      // Fetch dynamic tasks from database
+      const dynamicTasks = await Task.find({ active: true });
+      dynamicTasks.forEach(task => {
+        tasks.push({
+          id: task._id.toString(),
+          type: task.type,
+          title: task.title,
+          description: task.description,
+          icon: task.icon,
+          reward: task.reward,
+          link: task.link,
+          completed: user.completedTasks && user.completedTasks.includes(task._id),
+          progress: user.completedTasks && user.completedTasks.includes(task._id) ? 1 : 0,
+          target: 1,
+          isDynamic: true
+        });
+      });
+
 
       callback({
         success: true,
@@ -786,10 +811,7 @@ class TasksHandler {
           if (user.tinlakeJoinedRewardClaimed) {
             return callback({ success: false, error: 'Tinlake join reward already claimed' });
           }
-          
-          // For Tinlake join, we'll use manual verification
           const tinlakeConfirmed = data.confirmed || false;
-          
           if (!tinlakeConfirmed) {
             return callback({ 
               success: false, 
@@ -797,8 +819,6 @@ class TasksHandler {
               requiresConfirmation: true
             });
           }
-          
-          // Tinlake join reward: 0.3 PHMN
           rewardAmount = 0.3;
           user.tinlakeJoinedRewardClaimed = true;
           user.PHMN = (user.PHMN || 0) + rewardAmount;
@@ -806,7 +826,32 @@ class TasksHandler {
           break;
 
         default:
-          return callback({ success: false, error: 'Invalid task ID' });
+          // Check if it's a dynamic task
+          if (mongoose.Types.ObjectId.isValid(taskId)) {
+            const dynamicTask = await Task.findById(taskId);
+            if (dynamicTask) {
+              if (user.completedTasks && user.completedTasks.includes(dynamicTask._id)) {
+                return callback({ success: false, error: 'Task already completed' });
+              }
+              const confirmed = data.confirmed || false;
+              if (!confirmed) {
+                return callback({ 
+                  success: false, 
+                  error: `Please complete "${dynamicTask.title}" first, then confirm to claim your reward.`,
+                  requiresConfirmation: true
+                });
+              }
+              rewardAmount = dynamicTask.reward;
+              if (!user.completedTasks) user.completedTasks = [];
+              user.completedTasks.push(dynamicTask._id);
+              user.PHMN = (user.PHMN || 0) + rewardAmount;
+              message = `${dynamicTask.title} reward claimed! +${rewardAmount} PHMN`;
+            } else {
+              return callback({ success: false, error: 'Invalid task ID' });
+            }
+          } else {
+            return callback({ success: false, error: 'Invalid task ID' });
+          }
       }
 
       // All rewards are already handled in their respective cases
@@ -920,21 +965,63 @@ class TasksHandler {
         return isMember;
       } else {
         console.log(`⚠️ Telegram API error: ${data.description}`);
-        
-        // Provide specific guidance for common errors
-        if (data.description.includes('member list is inaccessible')) {
-          console.log('💡 Solution: Bot needs to be admin of the channel with "Get Chat Member" permission');
-        } else if (data.description.includes('chat not found')) {
-          console.log('💡 Solution: Check if channel username is correct');
-        } else if (data.description.includes('bot was blocked')) {
-          console.log('💡 Solution: Bot needs to be added to the channel');
-        }
-        
         return false;
       }
     } catch (error) {
       console.error('❌ Error verifying channel membership:', error);
       return false;
+    }
+  }
+
+  // Admin: Get all tasks
+  async handleGetTasks(data, callback) {
+    try {
+      const tasks = await Task.find({}).sort({ createdAt: -1 });
+      callback({ success: true, tasks });
+    } catch (error) {
+      console.error('Error getting tasks:', error);
+      callback({ success: false, error: 'Failed to get tasks' });
+    }
+  }
+
+  // Admin: Add a new task
+  async handleAddTask(data, callback) {
+    try {
+      const { title, description, reward, link, icon, type } = data;
+      if (!title || !reward || !link) {
+        return callback({ success: false, error: 'Title, reward, and link are required' });
+      }
+
+      const newTask = new Task({
+        title,
+        description,
+        reward: parseFloat(reward),
+        link,
+        icon: icon || '🎯',
+        type: type || 'social'
+      });
+
+      await newTask.save();
+      callback({ success: true, task: newTask, message: 'Task added successfully' });
+    } catch (error) {
+      console.error('Error adding task:', error);
+      callback({ success: false, error: 'Failed to add task' });
+    }
+  }
+
+  // Admin: Delete a task
+  async handleDeleteTask(data, callback) {
+    try {
+      const { taskId } = data;
+      if (!taskId) {
+        return callback({ success: false, error: 'Task ID is required' });
+      }
+
+      await Task.findByIdAndDelete(taskId);
+      callback({ success: true, message: 'Task deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      callback({ success: false, error: 'Failed to delete task' });
     }
   }
 }
